@@ -1,0 +1,1286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Consultation — Employee Health Centre</title>
+<script src="https://alcdn.msauth.net/browser/3.7.1/js/msal-browser.min.js"></script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:"Segoe UI", system-ui, -apple-system, sans-serif; background:#eef1ef; color:#1a2b24; font-size:14.5px; line-height:1.5; }
+  button { font-family:inherit; cursor:pointer; }
+  input, textarea, select { font-family:inherit; font-size:14px; }
+  .wrap { max-width:1260px; margin:0 auto; padding:20px; }
+
+  /* Loader / error */
+  .loader { display:flex; align-items:center; justify-content:center; min-height:60vh; flex-direction:column; gap:10px; color:#728279; }
+  .spinner { width:36px; height:36px; border:3px solid #e4e9e6; border-top-color:#1c5a41; border-radius:50%; animation:spin 0.8s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .fatal { max-width:600px; margin:80px auto; background:#fff; border:1px solid #ef5069; border-radius:12px; padding:28px; }
+  .fatal h2 { color:#7a1020; margin-bottom:10px; }
+  .fatal p { margin-bottom:14px; color:#1a2b24; }
+  .fatal a { color:#127a75; font-weight:600; }
+  .fatal pre { background:#f4f7f5; padding:10px; border-radius:6px; font-size:12px; overflow-x:auto; margin:8px 0; }
+
+  /* Top bar */
+  .topbar {
+    background:#fff; border:1px solid #e4e9e6; border-radius:12px 12px 0 0;
+    padding:12px 20px; display:flex; align-items:center; justify-content:space-between;
+    border-bottom:none;
+  }
+  .brand { display:flex; align-items:center; gap:12px; }
+  .logo { width:30px; height:30px; border-radius:8px; background:#1c5a41; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:15px; }
+  .brand-name { font-weight:800; font-size:15px; }
+  .role-chip { font-size:11.5px; color:#127a75; font-weight:700; background:#127a7518; padding:3px 9px; border-radius:20px; margin-left:6px; }
+  .top-actions { display:flex; gap:8px; }
+  .btn-back { border:1px solid #e4e9e6; background:#fff; padding:7px 14px; border-radius:8px; font-size:13px; font-weight:600; color:#1a2b24; display:inline-flex; align-items:center; gap:6px; }
+  .btn-back:hover { background:#f4f7f5; }
+
+  /* Patient header */
+  .patient-header { background:#fff; border-left:1px solid #e4e9e6; border-right:1px solid #e4e9e6; padding:14px 20px; display:flex; align-items:center; justify-content:space-between; }
+  .patient-info { display:flex; align-items:center; gap:14px; }
+  .avatar { width:44px; height:44px; border-radius:12px; background:#1c5a41; color:#fff; display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:800; }
+  .patient-name { font-size:19px; font-weight:800; }
+  .patient-meta { font-size:12.5px; color:#728279; margin-top:2px; }
+
+  /* Layout */
+  .layout { background:#fff; border:1px solid #e4e9e6; border-radius:0 0 12px 12px; padding:18px; display:grid; grid-template-columns:380px 1fr; gap:18px; align-items:start; }
+  @media (max-width: 900px) { .layout { grid-template-columns:1fr; } }
+
+  /* Sidebar cards */
+  .side-card { background:#fff; border:1px solid #e4e9e6; border-radius:12px; padding:14px 16px; }
+  .side-card + .side-card { margin-top:12px; }
+  .side-title { font-size:13.5px; font-weight:800; color:#1a2b24; margin-bottom:2px; }
+  .side-sub { font-size:11.5px; color:#728279; margin-bottom:10px; }
+
+  /* Score row */
+  .score-row { display:flex; align-items:center; gap:10px; margin-bottom:12px; padding-bottom:10px; border-bottom:1px solid #e4e9e6; }
+  .score-badge { background:#1c5a41; color:#fff; border-radius:10px; padding:7px 11px; text-align:center; }
+  .score-badge .num { font-size:20px; font-weight:800; line-height:1; }
+  .score-badge .lbl { font-size:8.5px; opacity:.85; margin-top:3px; }
+  .risk-chip { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; padding:3px 8px; border-radius:20px; }
+  .risk-chip::before { content:''; width:6px; height:6px; border-radius:50%; background:currentColor; }
+  .risk-N { color:#2f8f66; background:#2f8f661a; } .risk-L { color:#d9a441; background:#d9a4411a; }
+  .risk-M { color:#e07c3e; background:#e07c3e1a; } .risk-H { color:#ef5069; background:#ef50691a; }
+
+  /* Category panels */
+  .cat-panel { border:1px solid #e4e9e6; border-radius:8px; margin-bottom:7px; overflow:hidden; }
+  .cat-head { padding:6px 10px; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.4px; display:flex; justify-content:space-between; align-items:center; color:#fff; }
+  .cat-lipid { background:#0e6b6b; } .cat-thyroid { background:#2f9e7d; } .cat-sugar { background:#e0a83c; } .cat-rft { background:#7a5cc0; } .cat-lft { background:#e0703c; }
+  .cat-stage-tag { font-size:9.5px; background:rgba(255,255,255,.25); padding:2px 6px; border-radius:4px; }
+  .cat-body { padding:6px 10px; }
+  .cat-row { display:flex; justify-content:space-between; align-items:flex-start; padding:5px 0; font-size:11.5px; gap:8px; }
+  .cat-row + .cat-row { border-top:1px dashed #e4e9e6; }
+  .cat-row .lbl { color:#1a2b24; font-weight:600; padding-top:2px; flex:1; }
+  .cat-row .valbox { text-align:right; flex-shrink:0; }
+  .cat-row .val { font-weight:800; line-height:1.15; }
+  .cat-row .val .unit { color:#728279; font-weight:500; font-size:10.5px; margin-left:2px; }
+  .cat-row .range { font-size:10px; color:#728279; font-style:italic; margin-top:1px; }
+  .val-N .val { color:#2f8f66; } .val-L .val { color:#d9a441; } .val-M .val { color:#e07c3e; } .val-H .val { color:#ef5069; }
+
+  /* Previous visit */
+  .prev-line { display:flex; padding:7px 0; border-top:1px solid #e4e9e6; font-size:12px; }
+  .prev-line:first-of-type { border-top:none; padding-top:2px; }
+  .prev-line .k { width:78px; color:#728279; font-weight:700; font-size:10.5px; text-transform:uppercase; letter-spacing:.3px; flex-shrink:0; }
+  .prev-line .v { flex:1; line-height:1.4; }
+  .prev-line .v ul { margin-left:14px; font-size:11.5px; }
+  .empty-msg { text-align:center; padding:16px 12px; color:#728279; font-size:12px; background:#f4f7f5; border-radius:8px; font-style:italic; }
+
+  /* Open goals */
+  .open-card { border:1px solid #d9a44155; }
+  .goal-item { padding:10px 0; border-top:1px solid #e4e9e6; }
+  .goal-item:first-of-type { border-top:none; padding-top:2px; }
+  .goal-name { font-size:12.5px; font-weight:800; color:#1a2b24; }
+  .goal-tgt { font-size:11.5px; color:#728279; margin:2px 0 6px; line-height:1.4; }
+  .goal-tgt b { color:#123f2d; font-weight:700; }
+  .goal-btns { display:flex; gap:5px; }
+  .goal-btn { flex:1; padding:5px 4px; font-size:10.5px; font-weight:700; border-radius:6px; border:1px solid #e4e9e6; background:#fff; color:#1a2b24; text-align:center; }
+  .goal-btn.selected-yes { background:#2f8f66; color:#fff; border-color:#2f8f66; }
+  .goal-btn.selected-partially { background:#d9a441; color:#fff; border-color:#d9a441; }
+  .goal-btn.selected-no { background:#ef5069; color:#fff; border-color:#ef5069; }
+  .goal-btn:hover:not([disabled]) { background:#f4f7f5; }
+
+  /* Form */
+  .form-card { background:#fff; border:1px solid #e4e9e6; border-radius:12px; padding:20px; }
+  .form-title { font-size:16px; font-weight:800; }
+  .form-sub { font-size:12px; color:#728279; margin:3px 0 16px; }
+
+  .section { border:1px solid #e4e9e6; border-radius:10px; padding:14px 16px; margin-bottom:14px; }
+  .section.new { background:#fff9ec; border:1px solid #e6c76a; }
+  .section.goal { background:#f4f7f5; }
+  .section-title { font-size:12px; font-weight:800; color:#1c5a41; margin-bottom:10px; display:flex; align-items:center; gap:8px; text-transform:uppercase; letter-spacing:.4px; }
+  .section.new .section-title { color:#7a5000; }
+  .prefill-hint { background:#dcebe3; color:#123f2d; padding:2px 7px; border-radius:10px; font-size:10px; font-weight:700; text-transform:none; letter-spacing:0; }
+  .fresh-hint { background:#fff; border:1px solid #e4e9e6; color:#728279; padding:2px 7px; border-radius:10px; font-size:10px; font-weight:700; text-transform:none; letter-spacing:0; }
+
+  .field-label { font-size:10.5px; font-weight:700; color:#728279; margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px; display:block; }
+  input, textarea, select {
+    width:100%; padding:8px 11px; border:1px solid #e4e9e6; border-radius:8px;
+    font-size:13.5px; color:#1a2b24; background:#fbfcfb;
+  }
+  input:focus, textarea:focus, select:focus { outline:none; border-color:#127a75; background:#fff; }
+  textarea { min-height:60px; resize:vertical; }
+  textarea.long { min-height:76px; }
+  input.prefilled, textarea.prefilled, select.prefilled { background:#f4faf6; }
+  input[readonly] { background:#f4f7f5; color:#728279; }
+
+  .row { display:flex; gap:12px; margin-bottom:12px; }
+  .row > div { flex:1; }
+  .row:last-child { margin-bottom:0; }
+
+  .num-tag { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:5px; background:#127a75; color:#fff; font-size:10.5px; font-weight:800; margin-right:6px; flex-shrink:0; }
+  .num-tag.new { background:#d9a441; }
+  .field-title-row { display:flex; align-items:center; margin-bottom:4px; }
+
+  /* Medicine rows */
+  .med-row { display:flex; gap:6px; margin-bottom:6px; align-items:center; }
+  .med-row input { padding:7px 10px; }
+  .m-name { flex:2; } .m-dose { flex:1; } .m-freq { flex:1.3; } .m-dur { flex:1; }
+  .m-del { width:30px; height:32px; border:1px solid #e4e9e6; background:#fff; border-radius:7px; color:#ef5069; font-size:15px; }
+  .m-del:hover { background:#ef50691a; }
+  .add-btn { font-size:12px; font-weight:700; color:#127a75; background:#127a7512; border:none; border-radius:7px; padding:6px 12px; margin-top:4px; }
+  .add-btn:hover { background:#127a7522; }
+
+  /* Goal row (new) */
+  .goal-row { display:flex; gap:6px; margin-bottom:6px; align-items:flex-start; }
+  .g-type { flex:1.8; }
+  .g-tgt { flex:1.3; }
+  .g-date { flex:1; }
+  .goal-row select, .goal-row input { padding:7px 10px; }
+  .recommend-badge { display:inline-block; font-size:9.5px; font-weight:800; background:#ef506925; color:#7a1020; padding:1px 5px; border-radius:3px; margin-left:3px; letter-spacing:.3px; }
+
+  /* Actions */
+  .actions { display:flex; gap:10px; justify-content:flex-end; margin-top:8px; }
+  .btn { padding:10px 20px; border-radius:8px; font-weight:700; font-size:14px; border:none; }
+  .btn-secondary { background:#fff; border:1px solid #e4e9e6; color:#1a2b24; }
+  .btn-secondary:hover { background:#f4f7f5; }
+  .btn-primary { background:#127a75; color:#fff; }
+  .btn-primary:hover { background:#0e5e5b; }
+  .btn-primary:disabled { background:#728279; cursor:not-allowed; }
+
+  /* Toast */
+  .toast { position:fixed; top:20px; right:20px; padding:12px 18px; border-radius:10px; background:#1a2b24; color:#fff; font-size:13px; box-shadow:0 6px 20px rgba(0,0,0,.15); z-index:1000; animation:slideIn 0.3s; }
+  .toast.error { background:#7a1020; }
+  .toast.success { background:#2f8f66; }
+  @keyframes slideIn { from { transform:translateX(20px); opacity:0; } to { transform:translateX(0); opacity:1; } }
+
+  /* ============= PREVIEW (prescription) ============= */
+  .rx-wrap { max-width:820px; margin:0 auto; background:#fff; border:1px solid #e4e9e6; border-radius:12px; padding:32px 40px; }
+  .rx-header { display:flex; justify-content:space-between; align-items:flex-start; padding-bottom:16px; border-bottom:2px solid #1c5a41; }
+  .rx-clinic { font-size:20px; font-weight:800; color:#1c5a41; }
+  .rx-tag { font-size:11px; color:#728279; margin-top:2px; }
+  .rx-doctor { text-align:right; font-size:13px; }
+  .rx-doctor .dr-name { font-weight:800; font-size:15px; color:#1a2b24; }
+  .rx-doctor .dr-title { color:#728279; font-size:11.5px; margin-top:2px; }
+
+  .rx-pt { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; padding:16px 0; border-bottom:1px dashed #e4e9e6; font-size:13px; }
+  .rx-pt .k { color:#728279; font-size:10.5px; text-transform:uppercase; letter-spacing:.4px; font-weight:700; margin-bottom:2px; }
+  .rx-pt .v { color:#1a2b24; font-weight:600; }
+
+  .rx-section { padding:14px 0; border-bottom:1px dashed #e4e9e6; }
+  .rx-section:last-child { border-bottom:none; }
+  .rx-h { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:#1c5a41; font-weight:800; margin-bottom:8px; }
+  .rx-body { font-size:13.5px; color:#1a2b24; line-height:1.6; }
+  .rx-body.empty { color:#728279; font-style:italic; }
+
+  .rx-vitals { display:grid; grid-template-columns:repeat(5, 1fr); gap:10px; }
+  .rx-vitals > div { padding:8px 10px; background:#f4f7f5; border-radius:6px; }
+  .rx-vitals .k { font-size:10px; color:#728279; text-transform:uppercase; letter-spacing:.4px; }
+  .rx-vitals .v { font-size:14px; font-weight:800; margin-top:2px; }
+
+  .rx-rx-hd { font-size:32px; color:#1c5a41; float:left; margin-right:12px; line-height:1; font-weight:800; font-family:Georgia, serif; }
+  .rx-meds { list-style:none; }
+  .rx-meds li { padding:6px 0; font-size:13.5px; display:flex; gap:8px; }
+  .rx-meds .med-num { color:#728279; width:22px; flex-shrink:0; }
+  .rx-meds .med-name { font-weight:700; }
+  .rx-meds .med-details { color:#728279; font-size:12.5px; margin-left:4px; }
+
+  .rx-goals { list-style:none; }
+  .rx-goals li { padding:6px 0; font-size:13px; display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; align-items:center; }
+  .rx-goals li + li { border-top:1px dashed #e4e9e6; }
+  .rx-goals .gname { font-weight:700; }
+  .rx-goals .gtgt { color:#728279; }
+
+  .rx-footer { padding-top:20px; margin-top:16px; border-top:1px solid #e4e9e6; display:flex; justify-content:space-between; align-items:flex-end; font-size:12px; color:#728279; }
+  .rx-sig { text-align:right; }
+  .rx-sig-line { width:180px; border-top:1px solid #1a2b24; padding-top:6px; margin-top:38px; font-size:11.5px; color:#728279; }
+
+  .rx-actions { max-width:820px; margin:16px auto 0; display:flex; gap:10px; justify-content:flex-end; }
+  .rx-actions .btn-print { background:#7a5cc0; color:#fff; }
+  .rx-actions .btn-print:hover { background:#5c3fa8; }
+
+  /* ============= PRINT STYLES ============= */
+  @media print {
+    body { background:#fff; }
+    .wrap { padding:0; max-width:none; }
+    .topbar, .patient-header, .layout, .no-print, .rx-actions { display:none !important; }
+    .rx-wrap { border:none; box-shadow:none; padding:20px; max-width:none; margin:0; }
+    .rx-header { border-bottom:2px solid #000; }
+    .rx-h { color:#000; }
+    .rx-clinic, .rx-rx-hd { color:#000; }
+    @page { margin:1.5cm; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="loader"><div class="spinner"></div><div>Loading…</div></div>
+</div>
+
+<script>
+'use strict';
+
+// ============ CONFIG ============
+const CONFIG = JSON.parse(localStorage.getItem('ehc_config_v1') || '{}');
+const ROLE = sessionStorage.getItem('ehc_role');
+
+// The 7 hardcoded goal types (+ Other)
+const GOAL_TYPES = [
+  { id:'ecg',    name:'Heart Condition (ECG)', paramKeys:['ECG'],                                targetHint:'Normal sinus rhythm' },
+  { id:'hba1c',  name:'HbA1c',                 paramKeys:['HbA1c','HBA1C'],                     targetHint:'< 5.7%' },
+  { id:'weight', name:'Weight',                paramKeys:['Weight'],                            targetHint:'e.g. 70 kg' },
+  { id:'ldl',    name:'LDL',                   paramKeys:['LDL'],                                targetHint:'< 100 mg/dL' },
+  { id:'hdl',    name:'HDL',                   paramKeys:['HDL'],                                targetHint:'> 40 mg/dL' },
+  { id:'vitd',   name:'Vitamin D',             paramKeys:['Vitamin D','Vitamin-D','25-OH'],     targetHint:'> 30 ng/mL' },
+  { id:'tsh',    name:'TSH',                   paramKeys:['TSH'],                                targetHint:'0.4–4.0 µIU/mL' },
+  { id:'other',  name:'Other (specify)',       paramKeys:[],                                    targetHint:'e.g. BP < 130/80' }
+];
+
+// ============ STATE ============
+let STATE = {
+  ready: false,
+  fatal: null,
+  empId: '',
+  employee: null,
+  health: null,
+  previousVisits: [],  // consultation rows, newest first
+  healthProfile: null, // { id, EmployeeID, BloodGroup, ... }
+  openGoals: [],       // flattened list of open goals from previousVisits with backrefs
+  form: null,
+  mode: 'form',
+  saving: false,
+  toast: null
+};
+
+// ============ INIT ============
+async function init() {
+  // Guards
+  if (!CONFIG.clientId || !CONFIG.tenantId) return goHome('First-time setup not done. Return to home and run Admin Setup.');
+  if (ROLE !== 'doctor') return goHome('You are not signed in as Doctor. Return to home.');
+
+  const params = new URLSearchParams(location.search);
+  STATE.empId = params.get('empId') || '';
+  if (!STATE.empId) return goHome('No employee selected. Go back and choose one.');
+
+  try {
+    await initAuth();
+    await loadAll();
+    STATE.form = buildInitialForm();
+    STATE.ready = true;
+    render();
+  } catch (err) {
+    console.error(err);
+    STATE.fatal = err.message || String(err);
+    render();
+  }
+}
+
+function goHome(msg) {
+  STATE.fatal = msg;
+  render();
+}
+
+// ============ AUTH ============
+let msalInstance;
+async function initAuth() {
+  msalInstance = new msal.PublicClientApplication({
+    auth: {
+      clientId: CONFIG.clientId,
+      authority: `https://login.microsoftonline.com/${CONFIG.tenantId}`,
+      redirectUri: location.origin + location.pathname
+    },
+    cache: { cacheLocation: 'sessionStorage' }
+  });
+  await msalInstance.initialize();
+
+  // Handle redirect response (if we came back from login)
+  await msalInstance.handleRedirectPromise();
+
+  const accts = msalInstance.getAllAccounts();
+  if (accts.length === 0) {
+    await msalInstance.loginRedirect({ scopes:['User.Read','Files.Read.All','Sites.ReadWrite.All'] });
+    // Login redirect triggers page reload — execution stops here
+    return new Promise(() => {});
+  }
+}
+
+async function graphFetch(url, opts = {}) {
+  const account = msalInstance.getAllAccounts()[0];
+  const tok = await msalInstance.acquireTokenSilent({
+    scopes:['User.Read','Files.Read.All','Sites.ReadWrite.All'],
+    account
+  });
+  const resp = await fetch(url, {
+    method: opts.method || 'GET',
+    headers: {
+      Authorization: `Bearer ${tok.accessToken}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json'
+    },
+    body: opts.body ? JSON.stringify(opts.body) : undefined
+  });
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`Graph ${opts.method || 'GET'} ${resp.status}: ${text.slice(0, 200)}`);
+  }
+  return resp.status === 204 ? null : resp.json();
+}
+
+// ============ DATA LOADING ============
+async function loadAll() {
+  const [emp, health, visits, profile] = await Promise.all([
+    loadEmployee(STATE.empId),
+    loadHealth(STATE.empId).catch(e => { console.warn('Health load failed:', e); return null; }),
+    loadPreviousVisits(STATE.empId),
+    loadHealthProfile(STATE.empId).catch(e => { console.warn('Profile load failed:', e); return null; })
+  ]);
+  STATE.employee = emp;
+  STATE.health = health;
+  STATE.previousVisits = visits;
+  STATE.healthProfile = profile;
+  STATE.openGoals = extractOpenGoals(visits);
+}
+
+async function loadEmployee(empId) {
+  const url = `https://graph.microsoft.com/v1.0/me/drive/items/${CONFIG.masterFileId}/workbook/worksheets/${encodeURIComponent(CONFIG.masterSheet || 'Sheet1')}/usedRange`;
+  const data = await graphFetch(url);
+  if (!data || !data.values) throw new Error('Employee Master file has no data.');
+  const [hdr, ...rows] = data.values;
+  const ix = (n) => hdr.indexOf(n);
+  const c = { id:ix('Employee ID'), name:ix('Employee Name'), desg:ix('Designation'), title:ix('Title'), loc:ix('Location'), doj:ix('Date of Joining'), dob:ix('Date of Birth'), age:ix('Age'), ageR:ix('Age Range'), gen:ix('Gender'), func:ix('Function'), div:ix('Division'), vert:ix('Vertical'), role:ix('Role'), band:ix('Band'), lvl:ix('Level'), qual:ix('Basic Qualification'), zone:ix('Zone'), city:ix('City'), state:ix('State') };
+  const row = rows.find(r => String(r[c.id]) === String(empId));
+  if (!row) throw new Error(`Employee ${empId} not found in Employee Master.`);
+  return {
+    id: row[c.id], name: row[c.name], designation: row[c.desg], title: row[c.title],
+    location: row[c.loc], doj: row[c.doj], dob: row[c.dob], age: row[c.age], ageRange: row[c.ageR],
+    gender: row[c.gen], function: row[c.func], division: row[c.div], vertical: row[c.vert],
+    role: row[c.role], band: row[c.band], level: row[c.lvl], qualification: row[c.qual],
+    zone: row[c.zone], city: row[c.city], state: row[c.state]
+  };
+}
+
+async function loadHealth(empId) {
+  const url = `https://graph.microsoft.com/v1.0/me/drive/items/${CONFIG.healthFileId}/workbook/worksheets/${encodeURIComponent(CONFIG.healthSheet || 'Result 1')}/usedRange`;
+  const data = await graphFetch(url);
+  if (!data || !data.values) return null;
+  const [hdr, ...rows] = data.values;
+  const ix = (n) => hdr.indexOf(n);
+  const c = { id:ix('employee_id'), name:ix('customer_name'), gen:ix('gender'), age:ix('age_group'), score:ix('overall_health_score'), risk:ix('overall_risk_category'), stage:ix('risk_stage'), dc:ix('dc_name'), appt:ix('appointment_completed_on'), rep:ix('reports_upload_on'), param:ix('parameters'), val:ix('value'), unit:ix('report_value_unit'), range:ix('normal_range'), rl:ix('risk_level'), cat:ix('category'), stC:ix('Cardiac profile - stage'), stB:ix('Blood profile - stage'), stH:ix('Hepatic profile - stage'), stR:ix('Renal profile - stage'), stD:ix('Diabetic profile - stage'), stV:ix('Vitamin-D Profile - stage'), stT:ix('Thyroid Profile - stage'), stCn:ix('Cancer Profile - stage') };
+  const empRows = rows.filter(r => String(r[c.id]) === String(empId));
+  if (empRows.length === 0) return null;
+  const first = empRows[0];
+  const parameters = empRows.map(r => ({
+    category: r[c.cat] || '',
+    param: r[c.param] || '',
+    value: r[c.val],
+    unit: r[c.unit] || '',
+    range: r[c.range] || '',
+    riskLevel: Number(r[c.rl]) || 1
+  })).filter(p => p.param);
+
+  // Auto-detect blood group
+  const bg = parameters.find(p => String(p.param).toLowerCase().includes('blood group'));
+
+  return {
+    score: first[c.score], risk: first[c.risk], stage: first[c.stage],
+    dc: first[c.dc], appointmentDate: first[c.appt], reportDate: first[c.rep],
+    stages: {
+      cardiac: first[c.stC], blood: first[c.stB], hepatic: first[c.stH], renal: first[c.stR],
+      diabetic: first[c.stD], vitaminD: first[c.stV], thyroid: first[c.stT], cancer: first[c.stCn]
+    },
+    parameters,
+    bloodGroup: bg ? String(bg.value).trim() : ''
+  };
+}
+
+async function loadPreviousVisits(empId) {
+  const url = `https://graph.microsoft.com/v1.0/sites/${CONFIG.siteId}/lists/${CONFIG.consultListId}/items?expand=fields&$top=100`;
+  const data = await graphFetch(url);
+  return (data.value || [])
+    .map(it => ({ id: it.id, ...it.fields }))
+    .filter(f => String(f.EmployeeID) === String(empId))
+    .sort((a, b) => new Date(b.VisitDate) - new Date(a.VisitDate));
+}
+
+async function loadHealthProfile(empId) {
+  const url = `https://graph.microsoft.com/v1.0/sites/${CONFIG.siteId}/lists/${CONFIG.profileListId}/items?expand=fields&$top=200`;
+  const data = await graphFetch(url);
+  const items = (data.value || []).map(it => ({ id: it.id, ...it.fields }));
+  return items.find(f => String(f.EmployeeID) === String(empId)) || null;
+}
+
+// ============ HELPERS ============
+function safeParse(s, fallback) {
+  if (!s) return fallback;
+  try { return JSON.parse(s); } catch { return fallback; }
+}
+
+function extractOpenGoals(visits) {
+  const out = [];
+  for (const v of visits) {
+    const goals = safeParse(v.Goals, []);
+    goals.forEach((g, idx) => {
+      if (g.status === 'open') {
+        out.push({ ...g, sourceVisitId: v.id, sourceVisitDate: v.VisitDate, sourceGoalIdx: idx });
+      }
+    });
+  }
+  return out;
+}
+
+function buildInitialForm() {
+  const p = STATE.healthProfile;
+  const h = STATE.health;
+  return {
+    // Patient Profile (prefill)
+    bloodGroup: (p && p.BloodGroup) || (h && h.bloodGroup) || '',
+    familyHistory: (p && p.FamilyHistory) || '',
+    allergies: (p && p.Allergies) || '',
+    chronicConditions: (p && p.ChronicConditions) || '',
+    // Vitals (fresh)
+    bp: '', pulse: '', weight: '', height: '',
+    // Today
+    complaint: '', diagnosis: '',
+    medicines: [{ name:'', dose:'', freq:'', dur:'' }],
+    diet: '', exercise: '',
+    // Goals — start with one empty goal
+    goals: [{ type:'', customText:'', targetValue:'', targetDate:'' }],
+    // Follow-up
+    followUpDate: '', referral: ''
+  };
+}
+
+function calcBMI(w, h) {
+  const wKg = parseFloat(w), hCm = parseFloat(h);
+  if (!wKg || !hCm) return '';
+  return (wKg / Math.pow(hCm/100, 2)).toFixed(1);
+}
+
+function fmtDate(v) {
+  if (!v) return '';
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return String(v);
+  return d.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+}
+
+function fmtDateShort(v) {
+  if (!v) return '';
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return String(v);
+  return d.toLocaleDateString('en-GB', { day:'2-digit', month:'short' });
+}
+
+function isoToday() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function riskClass(level) {
+  if (level >= 4) return 'H';
+  if (level === 3) return 'M';
+  if (level === 2) return 'L';
+  return 'N';
+}
+
+function parseStage(s) {
+  if (!s) return { label:'Normal', cls:'N' };
+  const t = String(s).toLowerCase();
+  if (t.includes('normal')) return { label:'Normal', cls:'N' };
+  if (t.includes('low')) return { label:'Low Risk', cls:'L' };
+  if (t.includes('medium')) return { label:'Medium Risk', cls:'M' };
+  if (t.includes('high')) return { label:'High Risk', cls:'H' };
+  return { label:s, cls:'N' };
+}
+
+// Detect if a goal-type is recommended for this employee based on health data
+function isRecommended(goalId) {
+  if (!STATE.health) return false;
+  const gt = GOAL_TYPES.find(g => g.id === goalId);
+  if (!gt || gt.paramKeys.length === 0) return false;
+  return STATE.health.parameters.some(p =>
+    gt.paramKeys.some(k => String(p.param).toLowerCase().includes(k.toLowerCase())) &&
+    p.riskLevel >= 3
+  );
+}
+
+function pickParam(names) {
+  if (!STATE.health) return null;
+  const lower = names.map(n => n.toLowerCase());
+  return STATE.health.parameters.find(p => lower.some(l => String(p.param).toLowerCase().includes(l))) || null;
+}
+
+// ============ CATEGORY PANELS (annual checkup) ============
+const CATEGORIES = [
+  { key:'lipid',   title:'Lipid',           cls:'cat-lipid',   stageKey:'blood',    params:[
+    { label:'Cholesterol',  keys:['Cholesterol'] },
+    { label:'LDL',          keys:['LDL'] },
+    { label:'HDL',          keys:['HDL'] },
+    { label:'Triglyceride', keys:['Triglyceride'] }
+  ]},
+  { key:'thyroid', title:'Thyroid',         cls:'cat-thyroid', stageKey:'thyroid',  params:[
+    { label:'T3',  keys:['T3','Triiodothyronine'] },
+    { label:'T4',  keys:['T4','Thyroxine'] },
+    { label:'TSH', keys:['TSH'] }
+  ]},
+  { key:'sugar',   title:'Blood Sugar',     cls:'cat-sugar',   stageKey:'diabetic', params:[
+    { label:'HbA1c', keys:['HbA1c','HBA1C'] }
+  ]},
+  { key:'rft',     title:'RFT — Renal',     cls:'cat-rft',     stageKey:'renal',    params:[
+    { label:'Urea',       keys:['Urea'] },
+    { label:'Creatinine', keys:['Creatinine'] },
+    { label:'Uric Acid',  keys:['Uric Acid'] },
+    { label:'BUN',        keys:['BUN'] }
+  ]},
+  { key:'lft',     title:'LFT — Hepatic',   cls:'cat-lft',     stageKey:'hepatic',  params:[
+    { label:'AST / SGOT',         keys:['AST','SGOT'] },
+    { label:'ALT / SGPT',         keys:['ALT','SGPT'] },
+    { label:'Alkaline Phosphate', keys:['Alkaline'] },
+    { label:'Gamma GT',           keys:['Gamma','GGT'] },
+    { label:'A/G Ratio',          keys:['A/G','Albumin/Globulin'] }
+  ]}
+];
+
+// ============ RENDER ============
+function h(s) {
+  if (s == null) return '';
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+function render() {
+  const app = document.getElementById('app');
+
+  if (STATE.fatal) {
+    app.innerHTML = `
+      <div class="fatal">
+        <h2>Can't open this page</h2>
+        <p>${h(STATE.fatal)}</p>
+        <p><a href="index.html">← Back to home</a></p>
+      </div>
+    `;
+    return;
+  }
+
+  if (!STATE.ready) {
+    app.innerHTML = `<div class="loader"><div class="spinner"></div><div>Loading employee data…</div></div>`;
+    return;
+  }
+
+  if (STATE.mode === 'preview') {
+    app.innerHTML = renderPreview();
+    attachPreviewHandlers();
+  } else {
+    app.innerHTML = renderFormPage();
+    attachFormHandlers();
+  }
+
+  if (STATE.toast) {
+    const t = document.createElement('div');
+    t.className = 'toast ' + (STATE.toast.type || '');
+    t.textContent = STATE.toast.msg;
+    document.body.appendChild(t);
+    setTimeout(() => { t.remove(); STATE.toast = null; }, 3500);
+  }
+}
+
+// ============ FORM PAGE ============
+function renderFormPage() {
+  const e = STATE.employee;
+  return `
+    <div class="wrap">
+      ${renderTopBar()}
+      ${renderPatientHeader()}
+      <div class="layout">
+        <div>${renderSidebar()}</div>
+        <div>${renderForm()}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderTopBar() {
+  return `
+    <div class="topbar">
+      <div class="brand">
+        <div class="logo">✚</div>
+        <div class="brand-name">${h(CONFIG.orgName || 'Health Centre')}</div>
+        <div class="role-chip">Doctor</div>
+      </div>
+      <div class="top-actions">
+        <button class="btn-back" data-action="back">← Back</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderPatientHeader() {
+  const e = STATE.employee;
+  const initials = (e.name || '?').split(' ').map(x=>x[0]).slice(0,2).join('').toUpperCase();
+  const meta = [
+    `ID ${e.id}`, e.gender === 'M' ? 'Male' : e.gender === 'F' ? 'Female' : e.gender,
+    e.age ? `${e.age} yrs` : '', e.designation, e.location
+  ].filter(Boolean).join(' · ');
+  return `
+    <div class="patient-header">
+      <div class="patient-info">
+        <div class="avatar">${h(initials)}</div>
+        <div>
+          <div class="patient-name">${h(e.name)}</div>
+          <div class="patient-meta">${h(meta)}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ---------- Sidebar ----------
+function renderSidebar() {
+  return renderAnnualCheckup() + renderPreviousVisit() + renderOpenGoals();
+}
+
+function renderAnnualCheckup() {
+  const H = STATE.health;
+  if (!H) {
+    return `
+      <div class="side-card">
+        <div class="side-title">Annual Checkup</div>
+        <div class="side-sub">No health checkup on record</div>
+        <div class="empty-msg">No annual checkup found for this employee.</div>
+      </div>
+    `;
+  }
+  const risk = String(H.risk || '').toLowerCase();
+  const riskCls = risk.includes('conc') || risk.includes('poor') ? 'risk-H'
+                : risk.includes('below') || risk.includes('avg') || risk.includes('average') ? 'risk-M'
+                : risk.includes('good') ? 'risk-N' : 'risk-N';
+  return `
+    <div class="side-card">
+      <div class="side-title">Annual Checkup</div>
+      <div class="side-sub">Report ${h(fmtDate(H.reportDate))} · ${h(H.dc || '')}</div>
+      <div class="score-row">
+        <div class="score-badge"><div class="num">${h(H.score || '—')}</div><div class="lbl">SCORE</div></div>
+        <div>
+          <div class="risk-chip ${riskCls}">${h(H.risk || '—')}</div>
+          <div style="font-size:10.5px;color:#728279;margin-top:4px">Overall risk category</div>
+        </div>
+      </div>
+      ${CATEGORIES.map(c => renderCatPanel(c, H)).join('')}
+    </div>
+  `;
+}
+
+function renderCatPanel(cat, H) {
+  const stageRaw = H.stages[cat.stageKey];
+  const stage = parseStage(stageRaw);
+  return `
+    <div class="cat-panel">
+      <div class="cat-head ${cat.cls}">
+        <span>${cat.title}</span>
+        <span class="cat-stage-tag">${h(stage.label)}</span>
+      </div>
+      <div class="cat-body">
+        ${cat.params.map(p => {
+          const found = pickParam(p.keys);
+          const rl = found ? riskClass(found.riskLevel) : 'N';
+          const val = found ? found.value : '—';
+          const unit = found ? found.unit : '';
+          const range = found ? found.range : '';
+          return `
+            <div class="cat-row val-${rl}">
+              <div class="lbl">${h(p.label)}</div>
+              <div class="valbox">
+                <div class="val">${h(val)}${unit ? `<span class="unit">${h(unit)}</span>` : ''}</div>
+                ${range ? `<div class="range">Normal: ${h(range)}</div>` : ''}
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderPreviousVisit() {
+  const v = STATE.previousVisits[0];
+  if (!v) {
+    return `
+      <div class="side-card">
+        <div class="side-title">Previous Visit</div>
+        <div class="side-sub">No history yet</div>
+        <div class="empty-msg">No previous visits on record.</div>
+      </div>
+    `;
+  }
+  const meds = safeParse(v.Medicines, []);
+  const goals = safeParse(v.Goals, []);
+  const lastGoal = goals[goals.length - 1];
+  return `
+    <div class="side-card">
+      <div class="side-title">Previous Visit</div>
+      <div class="side-sub">Last visit ${h(fmtDate(v.VisitDate))}</div>
+      <div class="prev-line"><div class="k">Vitals</div><div class="v">${
+        [v.BP && `BP ${v.BP}`, v.Pulse && `Pulse ${v.Pulse}`, v.Weight && `Wt ${v.Weight}kg`, v.Height && `Ht ${v.Height}cm`, v.BMI && `BMI ${v.BMI}`].filter(Boolean).join(' · ') || '—'
+      }</div></div>
+      ${meds.length ? `<div class="prev-line"><div class="k">Medicines</div><div class="v"><ul>${meds.map(m => `<li>${h(m.name)} ${m.dose ? h(m.dose) : ''} ${m.freq ? '— ' + h(m.freq) : ''} ${m.dur ? '× ' + h(m.dur) : ''}</li>`).join('')}</ul></div></div>` : ''}
+      ${v.Diet ? `<div class="prev-line"><div class="k">Diet</div><div class="v">${h(v.Diet)}</div></div>` : ''}
+      ${v.Exercise ? `<div class="prev-line"><div class="k">Exercise</div><div class="v">${h(v.Exercise)}</div></div>` : ''}
+      ${goals.length ? `<div class="prev-line"><div class="k">Goals</div><div class="v">${goals.length} goal(s) set</div></div>` : ''}
+    </div>
+  `;
+}
+
+function renderOpenGoals() {
+  if (!STATE.openGoals.length) {
+    return `
+      <div class="side-card open-card">
+        <div class="side-title">Open Goals to Review</div>
+        <div class="side-sub">Nothing pending</div>
+        <div class="empty-msg">No open goals to review.</div>
+      </div>
+    `;
+  }
+  return `
+    <div class="side-card open-card">
+      <div class="side-title">Open Goals to Review</div>
+      <div class="side-sub">Mark progress (Yes = 100 pts · Partially = 50 · No = 0)</div>
+      ${STATE.openGoals.map((g, i) => {
+        const gt = GOAL_TYPES.find(t => t.id === g.type);
+        const name = gt ? (g.type === 'other' ? g.customText : gt.name) : (g.customText || g.type);
+        return `
+          <div class="goal-item">
+            <div class="goal-name">${h(name)}</div>
+            <div class="goal-tgt">
+              ${g.targetValue ? `Target: <b>${h(g.targetValue)}</b>` : ''}
+              ${g.targetValue && g.targetDate ? ' · ' : ''}
+              ${g.targetDate ? `by <b>${h(fmtDate(g.targetDate))}</b>` : ''}
+              <br><span style="color:#728279">Set on ${h(fmtDate(g.sourceVisitDate))}</span>
+            </div>
+            <div class="goal-btns">
+              <button class="goal-btn" data-goal-review="${g.sourceVisitId}|${g.sourceGoalIdx}|yes">Yes</button>
+              <button class="goal-btn" data-goal-review="${g.sourceVisitId}|${g.sourceGoalIdx}|partially">Partially</button>
+              <button class="goal-btn" data-goal-review="${g.sourceVisitId}|${g.sourceGoalIdx}|no">No</button>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+// ---------- Form ----------
+function renderForm() {
+  const f = STATE.form;
+  const bmi = calcBMI(f.weight, f.height);
+  return `
+    <div class="form-card">
+      <div class="form-title">New consultation</div>
+      <div class="form-sub">Preview before saving. Patient profile changes go to Employee Health Profile list; consultation goes to Doctor Consultations list.</div>
+
+      <!-- Patient Profile -->
+      <div class="section new">
+        <div class="section-title">Patient Profile <span class="prefill-hint">✓ Prefilled if any previous data</span></div>
+        <div class="row">
+          <div style="max-width:180px">
+            <div class="field-title-row"><span class="num-tag new">1</span><label class="field-label">Blood Group</label></div>
+            <select data-field="bloodGroup" class="prefilled">
+              <option value="">— select —</option>
+              ${['A+','A-','B+','B-','O+','O-','AB+','AB-'].map(bg => `<option value="${bg}" ${f.bloodGroup === bg ? 'selected' : ''}>${bg}</option>`).join('')}
+            </select>
+          </div>
+          <div></div>
+        </div>
+        <div class="row"><div>
+          <div class="field-title-row"><span class="num-tag new">2</span><label class="field-label">Family History</label></div>
+          <textarea data-field="familyHistory" class="long ${f.familyHistory ? 'prefilled' : ''}" placeholder="e.g. Father hypertensive since 2018; Mother diabetic; no known cancer history.">${h(f.familyHistory)}</textarea>
+        </div></div>
+        <div class="row"><div>
+          <div class="field-title-row"><span class="num-tag new">3</span><label class="field-label">Allergies</label></div>
+          <textarea data-field="allergies" class="${f.allergies ? 'prefilled' : ''}" placeholder="Known drug/food allergies. Leave blank if none.">${h(f.allergies)}</textarea>
+        </div></div>
+        <div class="row"><div>
+          <div class="field-title-row"><span class="num-tag new">4</span><label class="field-label">Chronic Conditions</label></div>
+          <textarea data-field="chronicConditions" class="${f.chronicConditions ? 'prefilled' : ''}" placeholder="Ongoing conditions (e.g. diabetic, hypertensive).">${h(f.chronicConditions)}</textarea>
+        </div></div>
+      </div>
+
+      <!-- Vitals -->
+      <div class="section">
+        <div class="section-title">Vitals <span class="fresh-hint">◯ Fresh each visit</span></div>
+        <div class="row">
+          <div><div class="field-title-row"><span class="num-tag">5</span><label class="field-label">BP (mmHg)</label></div><input data-field="bp" value="${h(f.bp)}" placeholder="120/80"></div>
+          <div><label class="field-label">&nbsp;Pulse (bpm)</label><input data-field="pulse" value="${h(f.pulse)}" placeholder="72"></div>
+          <div><label class="field-label">&nbsp;Weight (kg)</label><input data-field="weight" value="${h(f.weight)}" placeholder="70"></div>
+          <div><label class="field-label">&nbsp;Height (cm)</label><input data-field="height" value="${h(f.height)}" placeholder="170"></div>
+          <div><label class="field-label">&nbsp;BMI</label><input readonly value="${h(bmi)}"></div>
+        </div>
+      </div>
+
+      <!-- Today -->
+      <div class="section">
+        <div class="section-title">Today's Consultation <span class="fresh-hint">◯ Fresh each visit</span></div>
+        <div class="row"><div>
+          <div class="field-title-row"><span class="num-tag">6</span><label class="field-label">Chief complaint / symptoms</label></div>
+          <textarea data-field="complaint" placeholder="What brings the employee in today?">${h(f.complaint)}</textarea>
+        </div></div>
+        <div class="row"><div>
+          <div class="field-title-row"><span class="num-tag">7</span><label class="field-label">Diagnosis / clinical notes</label></div>
+          <textarea data-field="diagnosis" placeholder="Assessment & findings">${h(f.diagnosis)}</textarea>
+        </div></div>
+
+        <div class="field-title-row" style="margin-top:6px"><span class="num-tag">8</span><label class="field-label">Medicines prescribed</label></div>
+        ${f.medicines.map((m, i) => `
+          <div class="med-row">
+            <input class="m-name" data-med="${i}|name" value="${h(m.name)}" placeholder="Medicine">
+            <input class="m-dose" data-med="${i}|dose" value="${h(m.dose)}" placeholder="Dose">
+            <input class="m-freq" data-med="${i}|freq" value="${h(m.freq)}" placeholder="Frequency">
+            <input class="m-dur"  data-med="${i}|dur"  value="${h(m.dur)}"  placeholder="Duration">
+            <button class="m-del" data-med-del="${i}" ${f.medicines.length === 1 ? 'disabled style="opacity:.3"' : ''}>×</button>
+          </div>
+        `).join('')}
+        <button class="add-btn" data-action="add-medicine">+ Add medicine</button>
+
+        <div class="row" style="margin-top:14px">
+          <div>
+            <div class="field-title-row"><span class="num-tag">9</span><label class="field-label">Diet prescribed</label></div>
+            <textarea data-field="diet" placeholder="Dietary advice">${h(f.diet)}</textarea>
+          </div>
+          <div>
+            <div class="field-title-row"><span class="num-tag">10</span><label class="field-label">Exercise prescribed</label></div>
+            <textarea data-field="exercise" placeholder="Physical activity plan">${h(f.exercise)}</textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- Goals (new drop-down + add) -->
+      <div class="section goal">
+        <div class="section-title">🎯 Health Goals for Employee <span class="fresh-hint">◯ New goals this visit</span></div>
+        <div style="font-size:11.5px;color:#728279;margin-bottom:10px">Pick one or more from the 7 tracked types (⚠ = recommended based on this employee's checkup) or "Other" for custom.</div>
+
+        ${f.goals.map((g, i) => renderGoalRow(g, i)).join('')}
+        <button class="add-btn" data-action="add-goal">+ Add goal</button>
+        <div style="font-size:11px;color:#728279;margin-top:8px">Reviewed at next follow-up (Yes / Partially / No) — feeds HR rewards.</div>
+      </div>
+
+      <!-- Follow-up -->
+      <div class="section">
+        <div class="section-title">Follow-up &amp; Referral <span class="fresh-hint">◯ Fresh each visit</span></div>
+        <div class="row">
+          <div style="flex:1">
+            <div class="field-title-row"><span class="num-tag">11</span><label class="field-label">Follow-up date</label></div>
+            <input type="date" data-field="followUpDate" value="${h(f.followUpDate)}">
+          </div>
+          <div style="flex:2">
+            <div class="field-title-row"><span class="num-tag">12</span><label class="field-label">Refer to specialist (optional)</label></div>
+            <input data-field="referral" value="${h(f.referral)}" placeholder="e.g. Cardiologist">
+          </div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="actions">
+        <button class="btn btn-secondary" data-action="back">Cancel</button>
+        <button class="btn btn-primary" data-action="preview">Preview →</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderGoalRow(g, i) {
+  const isOther = g.type === 'other';
+  const gt = GOAL_TYPES.find(t => t.id === g.type);
+  const hint = gt ? gt.targetHint : 'Target value';
+  return `
+    <div class="goal-row">
+      ${isOther ? `
+        <input class="g-type" data-goal="${i}|customText" value="${h(g.customText)}" placeholder="Custom goal name">
+      ` : `
+        <select class="g-type" data-goal="${i}|type">
+          <option value="">— select goal —</option>
+          ${GOAL_TYPES.map(t => {
+            const rec = isRecommended(t.id);
+            return `<option value="${t.id}" ${g.type === t.id ? 'selected' : ''}>${rec ? '⚠ ' : ''}${t.name}</option>`;
+          }).join('')}
+        </select>
+      `}
+      <input class="g-tgt" data-goal="${i}|targetValue" value="${h(g.targetValue)}" placeholder="Target: ${h(hint)}">
+      <input type="date" class="g-date" data-goal="${i}|targetDate" value="${h(g.targetDate)}">
+      <button class="m-del" data-goal-del="${i}" ${STATE.form.goals.length === 1 ? 'disabled style="opacity:.3"' : ''}>×</button>
+    </div>
+    ${isOther ? '' : ''}
+  `;
+}
+
+// ============ HANDLERS ============
+function attachFormHandlers() {
+  const app = document.getElementById('app');
+
+  app.querySelectorAll('[data-action]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      const a = el.dataset.action;
+      if (a === 'back') return doBack();
+      if (a === 'preview') return doPreview();
+      if (a === 'add-medicine') { STATE.form.medicines.push({ name:'', dose:'', freq:'', dur:'' }); render(); }
+      if (a === 'add-goal')     { STATE.form.goals.push({ type:'', customText:'', targetValue:'', targetDate:'' }); render(); }
+    });
+  });
+
+  app.querySelectorAll('[data-field]').forEach(el => {
+    el.addEventListener('input', () => {
+      STATE.form[el.dataset.field] = el.value;
+      // Live BMI recalc when weight/height change
+      if (el.dataset.field === 'weight' || el.dataset.field === 'height') {
+        const bmiInput = app.querySelector('input[readonly]');
+        if (bmiInput) bmiInput.value = calcBMI(STATE.form.weight, STATE.form.height);
+      }
+    });
+  });
+
+  app.querySelectorAll('[data-med]').forEach(el => {
+    el.addEventListener('input', () => {
+      const [i, key] = el.dataset.med.split('|');
+      STATE.form.medicines[+i][key] = el.value;
+    });
+  });
+  app.querySelectorAll('[data-med-del]').forEach(el => {
+    el.addEventListener('click', () => {
+      const i = +el.dataset.medDel;
+      STATE.form.medicines.splice(i, 1);
+      render();
+    });
+  });
+
+  app.querySelectorAll('[data-goal]').forEach(el => {
+    const [i, key] = el.dataset.goal.split('|');
+    if (el.tagName === 'SELECT') {
+      el.addEventListener('change', () => {
+        STATE.form.goals[+i][key] = el.value;
+        // Re-render to swap dropdown for text input if "other"
+        render();
+      });
+    } else {
+      el.addEventListener('input', () => {
+        STATE.form.goals[+i][key] = el.value;
+      });
+    }
+  });
+  app.querySelectorAll('[data-goal-del]').forEach(el => {
+    el.addEventListener('click', () => {
+      const i = +el.dataset.goalDel;
+      STATE.form.goals.splice(i, 1);
+      render();
+    });
+  });
+
+  app.querySelectorAll('[data-goal-review]').forEach(el => {
+    el.addEventListener('click', async () => {
+      const [visitId, goalIdx, status] = el.dataset.goalReview.split('|');
+      el.disabled = true;
+      try {
+        await updateGoalStatus(visitId, +goalIdx, status);
+        STATE.toast = { type:'success', msg: `Marked as "${status}".` };
+        render();
+      } catch (err) {
+        STATE.toast = { type:'error', msg: `Failed to update: ${err.message}` };
+        render();
+      }
+    });
+  });
+}
+
+// ============ REVIEW OPEN GOAL ============
+async function updateGoalStatus(visitId, goalIdx, status) {
+  const visit = STATE.previousVisits.find(v => v.id === visitId);
+  if (!visit) throw new Error('Visit not found in cache.');
+  const goals = safeParse(visit.Goals, []);
+  if (!goals[goalIdx]) throw new Error('Goal not found.');
+  goals[goalIdx].status = status;
+  goals[goalIdx].closedOn = isoToday();
+
+  await graphFetch(
+    `https://graph.microsoft.com/v1.0/sites/${CONFIG.siteId}/lists/${CONFIG.consultListId}/items/${visitId}/fields`,
+    { method:'PATCH', body: { Goals: JSON.stringify(goals) } }
+  );
+
+  // Update local state
+  visit.Goals = JSON.stringify(goals);
+  STATE.openGoals = extractOpenGoals(STATE.previousVisits);
+}
+
+// ============ NAVIGATION ============
+function doBack() {
+  location.href = 'index.html';
+}
+
+function doPreview() {
+  // Validate essentials
+  const f = STATE.form;
+  if (!f.complaint || !f.complaint.trim()) {
+    STATE.toast = { type:'error', msg:'Chief complaint is required.' };
+    render(); return;
+  }
+  STATE.mode = 'preview';
+  render();
+}
+
+// ============ PREVIEW (prescription) ============
+function renderPreview() {
+  const e = STATE.employee;
+  const f = STATE.form;
+  const bmi = calcBMI(f.weight, f.height);
+  const today = new Date();
+
+  const meds = f.medicines.filter(m => m.name && m.name.trim());
+  const goals = f.goals.filter(g => (g.type && g.type !== 'other') || (g.type === 'other' && g.customText));
+
+  return `
+    <div class="wrap">
+      <div class="topbar no-print">
+        <div class="brand">
+          <div class="logo">✚</div>
+          <div class="brand-name">${h(CONFIG.orgName || 'Health Centre')}</div>
+          <div class="role-chip">Preview</div>
+        </div>
+        <div class="top-actions">
+          <button class="btn-back" data-action="edit">← Edit</button>
+        </div>
+      </div>
+
+      <div style="height:16px" class="no-print"></div>
+
+      <div class="rx-wrap">
+        <div class="rx-header">
+          <div>
+            <div class="rx-clinic">${h(CONFIG.orgName || 'Employee Health Centre')}</div>
+            <div class="rx-tag">Medical Consultation Report</div>
+          </div>
+          <div class="rx-doctor">
+            <div class="dr-name">${h(CONFIG.doctorName || 'Doctor')}</div>
+            <div class="dr-title">Employee Health Centre</div>
+            <div class="dr-title">${h(today.toLocaleDateString('en-GB', { day:'2-digit', month:'long', year:'numeric' }))}</div>
+          </div>
+        </div>
+
+        <div class="rx-pt">
+          <div><div class="k">Patient</div><div class="v">${h(e.name)}</div></div>
+          <div><div class="k">Employee ID</div><div class="v">${h(e.id)}</div></div>
+          <div><div class="k">Age / Sex</div><div class="v">${h(e.age || '')} / ${h(e.gender || '')}</div></div>
+          <div><div class="k">Designation</div><div class="v">${h(e.designation || '—')}</div></div>
+          <div><div class="k">Blood Group</div><div class="v">${h(f.bloodGroup || '—')}</div></div>
+          <div><div class="k">Location</div><div class="v">${h(e.location || '—')}</div></div>
+        </div>
+
+        ${f.complaint ? `
+          <div class="rx-section">
+            <div class="rx-h">Chief Complaint</div>
+            <div class="rx-body">${h(f.complaint)}</div>
+          </div>
+        ` : ''}
+
+        <div class="rx-section">
+          <div class="rx-h">Vitals</div>
+          <div class="rx-vitals">
+            <div><div class="k">BP</div><div class="v">${h(f.bp || '—')}</div></div>
+            <div><div class="k">Pulse</div><div class="v">${h(f.pulse || '—')}</div></div>
+            <div><div class="k">Weight</div><div class="v">${h(f.weight || '—')} ${f.weight ? 'kg' : ''}</div></div>
+            <div><div class="k">Height</div><div class="v">${h(f.height || '—')} ${f.height ? 'cm' : ''}</div></div>
+            <div><div class="k">BMI</div><div class="v">${h(bmi || '—')}</div></div>
+          </div>
+        </div>
+
+        ${f.diagnosis ? `
+          <div class="rx-section">
+            <div class="rx-h">Diagnosis</div>
+            <div class="rx-body">${h(f.diagnosis)}</div>
+          </div>
+        ` : ''}
+
+        ${meds.length ? `
+          <div class="rx-section">
+            <div class="rx-h"><span class="rx-rx-hd">℞</span> Medicines</div>
+            <ol class="rx-meds" style="clear:both">
+              ${meds.map((m, i) => `
+                <li>
+                  <span class="med-num">${i+1}.</span>
+                  <span>
+                    <span class="med-name">${h(m.name)}</span>
+                    ${m.dose ? ` — ${h(m.dose)}` : ''}
+                    ${m.freq ? `<span class="med-details">· ${h(m.freq)}</span>` : ''}
+                    ${m.dur ? `<span class="med-details">· ${h(m.dur)}</span>` : ''}
+                  </span>
+                </li>
+              `).join('')}
+            </ol>
+          </div>
+        ` : ''}
+
+        ${f.diet ? `
+          <div class="rx-section">
+            <div class="rx-h">Diet</div>
+            <div class="rx-body">${h(f.diet)}</div>
+          </div>
+        ` : ''}
+
+        ${f.exercise ? `
+          <div class="rx-section">
+            <div class="rx-h">Physical Activity</div>
+            <div class="rx-body">${h(f.exercise)}</div>
+          </div>
+        ` : ''}
+
+        ${goals.length ? `
+          <div class="rx-section">
+            <div class="rx-h">Health Goals</div>
+            <ol class="rx-goals">
+              ${goals.map(g => {
+                const gt = GOAL_TYPES.find(t => t.id === g.type);
+                const name = g.type === 'other' ? g.customText : (gt ? gt.name : g.type);
+                return `
+                  <li>
+                    <span class="gname">${h(name)}</span>
+                    <span class="gtgt">Target: <b>${h(g.targetValue || '—')}</b></span>
+                    <span class="gtgt">By: <b>${h(fmtDate(g.targetDate) || '—')}</b></span>
+                  </li>
+                `;
+              }).join('')}
+            </ol>
+          </div>
+        ` : ''}
+
+        ${(f.followUpDate || f.referral) ? `
+          <div class="rx-section">
+            <div class="rx-h">Follow-up</div>
+            <div class="rx-body">
+              ${f.followUpDate ? `Next visit: <b>${h(fmtDate(f.followUpDate))}</b>` : ''}
+              ${f.followUpDate && f.referral ? '<br>' : ''}
+              ${f.referral ? `Referred to: <b>${h(f.referral)}</b>` : ''}
+            </div>
+          </div>
+        ` : ''}
+
+        <div class="rx-footer">
+          <div>
+            <div>Generated by Employee Health Centre</div>
+            <div>Ref: ${h(e.id)}-${h(today.toISOString().slice(0,10))}</div>
+          </div>
+          <div class="rx-sig">
+            <div class="rx-sig-line">${h(CONFIG.doctorName || 'Doctor')} — Signature</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="rx-actions no-print">
+        <button class="btn btn-secondary" data-action="edit">← Edit</button>
+        <button class="btn btn-print" data-action="print">🖨 Print</button>
+        <button class="btn btn-primary" data-action="save" ${STATE.saving ? 'disabled' : ''}>${STATE.saving ? 'Saving…' : '✓ Save consultation'}</button>
+      </div>
+    </div>
+  `;
+}
+
+function attachPreviewHandlers() {
+  document.querySelectorAll('[data-action]').forEach(el => {
+    el.addEventListener('click', () => {
+      const a = el.dataset.action;
+      if (a === 'edit')  { STATE.mode = 'form'; render(); }
+      if (a === 'print') { window.print(); }
+      if (a === 'save')  { doSave(); }
+    });
+  });
+}
+
+// ============ SAVE ============
+async function doSave() {
+  if (STATE.saving) return;
+  STATE.saving = true;
+  render();
+
+  try {
+    const e = STATE.employee;
+    const f = STATE.form;
+    const today = isoToday();
+    const bmi = calcBMI(f.weight, f.height);
+
+    // 1) Save consultation
+    const goalsForSave = f.goals
+      .filter(g => (g.type && g.type !== 'other') || (g.type === 'other' && g.customText))
+      .map(g => ({
+        type: g.type,
+        customText: g.customText || '',
+        targetValue: g.targetValue || '',
+        targetDate: g.targetDate || '',
+        status: 'open',
+        setOn: today,
+        closedOn: null
+      }));
+
+    const medsForSave = f.medicines.filter(m => m.name && m.name.trim());
+
+    const consultFields = {
+      Title: `${e.id} · ${today}`,
+      EmployeeID: String(e.id),
+      EmployeeName: e.name || '',
+      VisitDate: today,
+      Doctor: CONFIG.doctorName || 'Doctor',
+      Complaint: f.complaint || '',
+      BP: f.bp || '', Pulse: f.pulse || '', Weight: f.weight || '', Height: f.height || '', BMI: bmi || '',
+      Diagnosis: f.diagnosis || '',
+      Medicines: JSON.stringify(medsForSave),
+      Diet: f.diet || '',
+      Exercise: f.exercise || '',
+      Goals: JSON.stringify(goalsForSave),
+      FollowUpDate: f.followUpDate || null,
+      Referral: f.referral || ''
+    };
+
+    await graphFetch(
+      `https://graph.microsoft.com/v1.0/sites/${CONFIG.siteId}/lists/${CONFIG.consultListId}/items`,
+      { method:'POST', body: { fields: consultFields } }
+    );
+
+    // 2) Upsert Employee Health Profile
+    const profileFields = {
+      Title: String(e.id),
+      EmployeeID: String(e.id),
+      BloodGroup: f.bloodGroup || '',
+      FamilyHistory: f.familyHistory || '',
+      Allergies: f.allergies || '',
+      ChronicConditions: f.chronicConditions || '',
+      LastUpdated: today
+    };
+
+    if (STATE.healthProfile && STATE.healthProfile.id) {
+      await graphFetch(
+        `https://graph.microsoft.com/v1.0/sites/${CONFIG.siteId}/lists/${CONFIG.profileListId}/items/${STATE.healthProfile.id}/fields`,
+        { method:'PATCH', body: profileFields }
+      );
+    } else {
+      await graphFetch(
+        `https://graph.microsoft.com/v1.0/sites/${CONFIG.siteId}/lists/${CONFIG.profileListId}/items`,
+        { method:'POST', body: { fields: profileFields } }
+      );
+    }
+
+    // Redirect home with a success flag
+    sessionStorage.setItem('ehc_last_save', JSON.stringify({ empId: e.id, at: Date.now() }));
+    location.href = 'index.html?saved=1';
+  } catch (err) {
+    console.error(err);
+    STATE.saving = false;
+    STATE.toast = { type:'error', msg: 'Save failed: ' + err.message };
+    render();
+  }
+}
+
+// ============ START ============
+init();
+</script>
+</body>
+</html>
