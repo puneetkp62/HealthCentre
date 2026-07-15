@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Employee Health Centre</title>
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.7.1/lib/msal-browser.min.js"></script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:"Segoe UI", system-ui, -apple-system, sans-serif; background:#eef1ef; color:#1a2b24; font-size:14.5px; line-height:1.5; }
+  button { font-family:inherit; cursor:pointer; }
+  input, select { font-family:inherit; font-size:14px; }
+  .wrap { max-width:1200px; margin:0 auto; padding:20px; }
+  a { color:#127a75; }
+
+  /* Loader */
+  .loader { display:flex; align-items:center; justify-content:center; min-height:60vh; flex-direction:column; gap:10px; color:#728279; }
+  .spinner { width:36px; height:36px; border:3px solid #e4e9e6; border-top-color:#1c5a41; border-radius:50%; animation:spin .8s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  /* Top bar */
+  .topbar { background:#fff; border:1px solid #e4e9e6; border-radius:12px 12px 0 0; padding:14px 22px; display:flex; align-items:center; justify-content:space-between; }
+  .brand { display:flex; align-items:center; gap:12px; }
+  .logo { width:32px; height:32px; border-radius:9px; background:#1c5a41; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:16px; }
+  .brand-name { font-weight:800; font-size:16px; }
+  .role-chip { font-size:12px; color:#127a75; font-weight:700; background:#127a7518; padding:4px 10px; border-radius:20px; margin-left:6px; }
+  .top-actions { display:flex; gap:10px; align-items:center; }
+  .btn-back { border:1px solid #e4e9e6; background:#fff; padding:8px 15px; border-radius:8px; font-size:13px; font-weight:600; color:#1a2b24; }
+  .btn-back:hover { background:#f4f7f5; }
+  .btn-ghost { border:1px solid #e4e9e6; background:#fff; padding:8px 14px; border-radius:8px; font-size:12.5px; font-weight:600; color:#728279; }
+  .btn-ghost:hover { background:#f4f7f5; }
+
+  .body-card { background:#fff; border:1px solid #e4e9e6; border-radius:0 0 12px 12px; padding:28px; min-height:60vh; }
+  .body-card.first { border-radius:12px; }
+
+  /* Home hero */
+  .home-hero { text-align:center; padding:36px 20px 28px; }
+  .home-hero .h-logo { width:56px; height:56px; border-radius:16px; background:#1c5a41; color:#fff; display:inline-flex; align-items:center; justify-content:center; font-size:26px; font-weight:800; margin-bottom:14px; }
+  .home-hero h1 { font-size:26px; font-weight:800; color:#123f2d; }
+  .home-hero p { color:#728279; font-size:14px; margin-top:6px; }
+
+  .roles-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:18px; max-width:900px; margin:0 auto; }
+  @media (max-width:720px) { .roles-grid { grid-template-columns:1fr; } }
+  .role-card { border:1px solid #e4e9e6; border-radius:14px; padding:24px; text-align:center; transition:.15s; cursor:pointer; background:#fff; }
+  .role-card:hover { border-color:#127a75; box-shadow:0 6px 18px rgba(18,122,117,.1); transform:translateY(-2px); }
+  .role-card .icon { font-size:32px; margin-bottom:10px; }
+  .role-card h3 { font-size:16px; font-weight:800; margin-bottom:4px; }
+  .role-card p { font-size:12.5px; color:#728279; }
+
+  .setup-banner { max-width:900px; margin:0 auto 20px; background:#fff4d6; border:1px solid #e6c76a; border-radius:12px; padding:14px 18px; display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:13px; color:#6b5010; }
+  .setup-banner button { background:#7a5000; color:#fff; border:none; padding:8px 16px; border-radius:8px; font-size:12.5px; font-weight:700; white-space:nowrap; }
+  .setup-ok-banner { max-width:900px; margin:0 auto 20px; background:#dcebe3; border:1px solid #2f8f66; border-radius:12px; padding:10px 18px; display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:13px; color:#123f2d; }
+  .setup-ok-banner button { background:#fff; border:1px solid #2f8f66; color:#123f2d; padding:6px 12px; border-radius:7px; font-size:12px; font-weight:600; }
+
+  /* Password modal */
+  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.4); display:flex; align-items:center; justify-content:center; z-index:1000; }
+  .modal { background:#fff; border-radius:14px; padding:26px 28px; width:340px; box-shadow:0 20px 50px rgba(0,0,0,.2); }
+  .modal h3 { font-size:16px; font-weight:800; margin-bottom:4px; }
+  .modal p { font-size:12.5px; color:#728279; margin-bottom:14px; }
+  .modal input { width:100%; padding:10px 12px; border:1px solid #e4e9e6; border-radius:8px; font-size:14px; margin-bottom:14px; }
+  .modal .row { display:flex; gap:10px; }
+  .modal .btn { flex:1; padding:10px; border-radius:8px; font-weight:700; font-size:13.5px; border:none; }
+  .modal .btn-cancel { background:#f4f7f5; color:#1a2b24; }
+  .modal .btn-ok { background:#127a75; color:#fff; }
+  .modal .err { color:#ef5069; font-size:12px; margin-top:-8px; margin-bottom:12px; }
+
+  /* Admin setup form */
+  .setup-form { max-width:640px; margin:0 auto; }
+  .setup-form h2 { font-size:20px; font-weight:800; margin-bottom:4px; }
+  .setup-form .sub { color:#728279; font-size:13px; margin-bottom:22px; }
+  .field-grp { margin-bottom:14px; }
+  .field-grp label { display:block; font-size:11px; font-weight:700; color:#728279; text-transform:uppercase; letter-spacing:.4px; margin-bottom:5px; }
+  .field-grp input { width:100%; padding:9px 12px; border:1px solid #e4e9e6; border-radius:8px; font-size:13.5px; }
+  .field-grp input:focus { outline:none; border-color:#127a75; }
+  .field-section { font-size:12px; font-weight:800; color:#1c5a41; text-transform:uppercase; letter-spacing:.4px; margin:22px 0 10px; padding-bottom:6px; border-bottom:1px solid #e4e9e6; }
+  .setup-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:20px; }
+  .btn { padding:11px 22px; border-radius:9px; font-weight:700; font-size:14px; border:none; }
+  .btn-secondary { background:#fff; border:1px solid #e4e9e6; color:#1a2b24; }
+  .btn-primary { background:#127a75; color:#fff; }
+  .btn-primary:disabled { background:#728279; }
+
+  /* Doctor search */
+  .search-box { max-width:520px; margin:0 auto 24px; }
+  .search-box h2 { font-size:20px; font-weight:800; text-align:center; margin-bottom:4px; }
+  .search-box .sub { text-align:center; color:#728279; font-size:13px; margin-bottom:18px; }
+  .search-row { display:flex; gap:10px; }
+  .search-row input { flex:1; padding:12px 16px; border:1px solid #e4e9e6; border-radius:10px; font-size:15px; }
+  .search-row input:focus { outline:none; border-color:#127a75; }
+  .search-row button { padding:12px 22px; background:#127a75; color:#fff; border:none; border-radius:10px; font-weight:700; font-size:14px; }
+  .search-row button:hover { background:#0e5e5b; }
+  .search-err { color:#ef5069; font-size:13px; margin-top:8px; text-align:center; }
+
+  /* Patient summary card */
+  .summary-card { max-width:640px; margin:0 auto; background:#fff; border:1px solid #e4e9e6; border-radius:14px; padding:24px; }
+  .sum-header { display:flex; align-items:center; gap:16px; padding-bottom:18px; border-bottom:1px solid #e4e9e6; margin-bottom:18px; }
+  .sum-avatar { width:56px; height:56px; border-radius:14px; background:#1c5a41; color:#fff; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:800; }
+  .sum-name { font-size:20px; font-weight:800; }
+  .sum-meta { color:#728279; font-size:13px; margin-top:3px; }
+  .sum-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:18px; }
+  .sum-item .k { font-size:10.5px; color:#728279; text-transform:uppercase; letter-spacing:.4px; font-weight:700; margin-bottom:2px; }
+  .sum-item .v { font-size:13.5px; font-weight:600; }
+  .sum-health { display:flex; align-items:center; gap:12px; background:#f4f7f5; border-radius:10px; padding:14px 16px; margin-bottom:18px; }
+  .sum-score { background:#1c5a41; color:#fff; border-radius:10px; padding:8px 13px; text-align:center; }
+  .sum-score .num { font-size:22px; font-weight:800; line-height:1; }
+  .sum-score .lbl { font-size:9px; opacity:.85; margin-top:3px; }
+  .sum-visits { font-size:12.5px; color:#728279; margin-bottom:18px; }
+  .sum-actions { display:flex; gap:10px; }
+  .sum-actions .btn { flex:1; }
+
+  /* Dashboards */
+  .dash-title { font-size:20px; font-weight:800; margin-bottom:4px; }
+  .dash-sub { color:#728279; font-size:13px; margin-bottom:22px; }
+  .stat-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:14px; margin-bottom:24px; }
+  @media (max-width:800px) { .stat-grid { grid-template-columns:repeat(2, 1fr); } }
+  .stat-card { background:#f4f7f5; border-radius:12px; padding:16px 18px; }
+  .stat-card .num { font-size:26px; font-weight:800; color:#123f2d; }
+  .stat-card .lbl { font-size:11.5px; color:#728279; margin-top:4px; font-weight:600; }
+
+  table.dash-table { width:100%; border-collapse:collapse; font-size:13px; }
+  table.dash-table th { text-align:left; padding:10px 12px; background:#f4f7f5; font-size:10.5px; text-transform:uppercase; letter-spacing:.4px; color:#728279; font-weight:800; }
+  table.dash-table td { padding:10px 12px; border-bottom:1px solid #e4e9e6; }
+  table.dash-table tr:last-child td { border-bottom:none; }
+  .pts-badge { display:inline-block; font-size:11.5px; font-weight:800; padding:2px 9px; border-radius:20px; }
+  .pts-100 { background:#2f8f661a; color:#2f8f66; }
+  .pts-50 { background:#d9a4411a; color:#d9a441; }
+  .pts-0 { background:#ef50691a; color:#ef5069; }
+  .status-open { color:#728279; font-style:italic; }
+
+  .empty-msg { text-align:center; padding:30px; color:#728279; font-size:13.5px; background:#f4f7f5; border-radius:10px; }
+
+  .toast { position:fixed; top:20px; right:20px; padding:12px 18px; border-radius:10px; background:#1a2b24; color:#fff; font-size:13px; box-shadow:0 6px 20px rgba(0,0,0,.15); z-index:1000; }
+  .toast.error { background:#7a1020; }
+  .toast.success { background:#2f8f66; }
+
+  .fatal { max-width:600px; margin:60px auto; background:#fff; border:1px solid #ef5069; border-radius:12px; padding:26px; text-align:center; }
+  .fatal h2 { color:#7a1020; margin-bottom:8px; }
+</style>
+</head>
+<body>
+<div id="app"><div class="loader"><div class="spinner"></div><div>Loading…</div></div></div>
+
+<script>
+'use strict';
+
+// ============ CONFIG & CONSTANTS ============
+const CONFIG_KEY = 'ehc_config_v1';
+const PASSWORDS = {
+  admin:  'adminpass',
+  doctor: 'drpass',
+  org:    'orgpass',
+  hr:     'hrpass'
+};
+// Goal reward points — Yes / Partially / No
+const GOAL_POINTS = { yes: 100, partially: 50, no: 0 };
+const GOAL_TYPES = [
+  { id:'ecg',    name:'Heart Condition (ECG)' },
+  { id:'hba1c',  name:'HbA1c' },
+  { id:'weight', name:'Weight' },
+  { id:'ldl',    name:'LDL' },
+  { id:'hdl',    name:'HDL' },
+  { id:'vitd',   name:'Vitamin D' },
+  { id:'tsh',    name:'TSH' },
+  { id:'other',  name:'Other' }
+];
+// NOTE: to add/remove/rename goal types, edit GOAL_TYPES above AND the matching
+// list in consultation.html (kept in sync manually since goals are hardcoded by design).
+
+function loadConfig() { try { return JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}'); } catch { return {}; } }
+function saveConfig(c) { localStorage.setItem(CONFIG_KEY, JSON.stringify(c)); }
+function configReady(c) {
+  return !!(c.clientId && c.tenantId && c.masterFileId && c.healthFileId && c.siteId && c.consultListId && c.profileListId);
+}
+
+// ============ STATE ============
+let STATE = {
+  screen: 'home',       // home | doctor-search | doctor-summary | org | hr | admin-setup
+  config: loadConfig(),
+  passwordPrompt: null, // { role, onSuccess }
+  passwordError: '',
+  loggedInRole: null,   // doctor | org | hr (session)
+  msal: null,
+  authReady: false,
+  searchId: '',
+  searchError: '',
+  employee: null,
+  health: null,
+  visitCount: 0,
+  loading: false,
+  toast: null,
+  orgData: null,
+  hrData: null
+};
+
+// ============ INIT ============
+function init() {
+  const params = new URLSearchParams(location.search);
+  if (params.get('saved') === '1') {
+    STATE.toast = { type:'success', msg:'Consultation saved successfully.' };
+    history.replaceState({}, '', location.pathname);
+  }
+
+  // Resume flow if we're returning from a Microsoft sign-in redirect
+  const pending = sessionStorage.getItem('ehc_pending_role');
+  if (pending) {
+    sessionStorage.removeItem('ehc_pending_role');
+    resumeAfterLogin(pending);
+    return;
+  }
+
+  render();
+}
+
+async function resumeAfterLogin(role) {
+  render(); // show loader (screen still 'home' briefly, but ensureAuth below shows spinner via loading state)
+  document.getElementById('app').innerHTML = '<div class="loader"><div class="spinner"></div><div>Signing you in…</div></div>';
+  try {
+    await ensureAuth();
+    STATE.loggedInRole = role;
+    if (role === 'doctor') { STATE.screen = 'doctor-search'; render(); }
+    if (role === 'org')    { STATE.screen = 'org'; loadOrgDashboard(); }
+    if (role === 'hr')     { STATE.screen = 'hr'; loadHRDashboard(); }
+  } catch (err) {
+    STATE.toast = { type:'error', msg: 'Sign-in failed: ' + err.message };
+    STATE.screen = 'home';
+    render();
+  }
+}
+
+// ============ HELPERS ============
+function h(s) { if (s == null) return ''; return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function safeParse(s, f) { if (!s) return f; try { return JSON.parse(s); } catch { return f; } }
+function fmtDate(v) { if (!v) return ''; const d = new Date(v); if (isNaN(d.getTime())) return String(v); return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}); }
+
+// ============ AUTH (shared MSAL instance) ============
+async function ensureAuth() {
+  if (typeof msal === 'undefined') {
+    throw new Error('The Microsoft sign-in library failed to load. Check your internet connection, disable any ad-blocker for this site, and refresh the page. If it keeps happening, your network may be blocking cdn.jsdelivr.net.');
+  }
+  if (STATE.msal && STATE.authReady) return STATE.msal;
+  const c = STATE.config;
+  STATE.msal = new msal.PublicClientApplication({
+    auth: { clientId: c.clientId, authority:`https://login.microsoftonline.com/${c.tenantId}`, redirectUri: location.origin + location.pathname },
+    cache: { cacheLocation:'sessionStorage' }
+  });
+  await STATE.msal.initialize();
+  await STATE.msal.handleRedirectPromise();
+  const accts = STATE.msal.getAllAccounts();
+  if (accts.length === 0) {
+    if (STATE.pendingRoleForRedirect) {
+      sessionStorage.setItem('ehc_pending_role', STATE.pendingRoleForRedirect);
+    }
+    await STATE.msal.loginRedirect({ scopes:['User.Read','Files.Read.All','Sites.ReadWrite.All'] });
+    return new Promise(() => {}); // page navigates away
+  }
+  STATE.authReady = true;
+  return STATE.msal;
+}
+
+async function graphFetch(url, opts = {}) {
+  const inst = await ensureAuth();
+  const account = inst.getAllAccounts()[0];
+  const tok = await inst.acquireTokenSilent({ scopes:['User.Read','Files.Read.All','Sites.ReadWrite.All'], account });
+  const resp = await fetch(url, {
+    method: opts.method || 'GET',
+    headers: { Authorization:`Bearer ${tok.accessToken}`, 'Content-Type':'application/json', Accept:'application/json' },
+    body: opts.body ? JSON.stringify(opts.body) : undefined
+  });
+  if (!resp.ok) { const t = await resp.text(); throw new Error(`Graph ${opts.method||'GET'} ${resp.status}: ${t.slice(0,200)}`); }
+  return resp.status === 204 ? null : resp.json();
+}
+
+// ============ RENDER ============
+function render() {
+  const app = document.getElementById('app');
+  let body = '';
+  switch (STATE.screen) {
+    case 'home':            body = renderHome(); break;
+    case 'admin-setup':     body = renderAdminSetup(); break;
+    case 'doctor-search':   body = renderDoctorSearch(); break;
+    case 'doctor-summary':  body = renderDoctorSummary(); break;
+    case 'org':             body = renderOrg(); break;
+    case 'hr':              body = renderHR(); break;
+    default:                body = renderHome();
+  }
+  app.innerHTML = body;
+  attachHandlers();
+
+  if (STATE.passwordPrompt) app.insertAdjacentHTML('beforeend', renderPasswordModal());
+  attachModalHandlers();
+
+  if (STATE.toast) {
+    const t = document.createElement('div');
+    t.className = 'toast ' + (STATE.toast.type || '');
+    t.textContent = STATE.toast.msg;
+    document.body.appendChild(t);
+    setTimeout(() => { t.remove(); STATE.toast = null; }, 3500);
+  }
+}
+
+function topBar(roleLabel, showBack) {
+  return `
+    <div class="topbar">
+      <div class="brand">
+        <div class="logo">✚</div>
+        <div class="brand-name">${h(STATE.config.orgName || 'Employee Health Centre')}</div>
+        ${roleLabel ? `<div class="role-chip">${h(roleLabel)}</div>` : ''}
+      </div>
+      <div class="top-actions">
+        ${showBack ? `<button class="btn-back" data-action="go-home">← Back</button>` : `<button class="btn-ghost" data-action="open-admin">⚙ First-time setup</button>`}
+      </div>
+    </div>
+  `;
+}
+
+// ============ HOME ============
+function renderHome() {
+  const ready = configReady(STATE.config);
+  return `
+    <div class="wrap">
+      ${topBar(null, false)}
+      <div class="body-card">
+        <div class="home-hero">
+          <div class="h-logo">✚</div>
+          <h1>${h(STATE.config.orgName || 'Employee Health Centre')}</h1>
+          <p>Choose your role to continue</p>
+        </div>
+
+        ${!ready ? `
+          <div class="setup-banner">
+            <span>⚠ First-time setup required — connect this app to your OneDrive files and SharePoint lists.</span>
+            <button data-action="open-admin">Run Admin setup →</button>
+          </div>
+        ` : `
+          <div class="setup-ok-banner">
+            <span>✓ App connected and ready.</span>
+            <button data-action="open-admin">Reconfigure</button>
+          </div>
+        `}
+
+        <div class="roles-grid">
+          <div class="role-card" data-action="login" data-role="doctor">
+            <div class="icon">🩺</div>
+            <h3>Doctor</h3>
+            <p>Look up an employee, review history, and start a consultation.</p>
+          </div>
+          <div class="role-card" data-action="login" data-role="org">
+            <div class="icon">🏢</div>
+            <h3>Organization</h3>
+            <p>Dashboard of consultation activity and health trends.</p>
+          </div>
+          <div class="role-card" data-action="login" data-role="hr">
+            <div class="icon">🎁</div>
+            <h3>HR</h3>
+            <p>Track employee goal achievement and rewards.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ============ PASSWORD MODAL ============
+function renderPasswordModal() {
+  const p = STATE.passwordPrompt;
+  const labelMap = { admin:'Admin', doctor:'Doctor', org:'Organization', hr:'HR' };
+  return `
+    <div class="modal-overlay" data-modal-overlay>
+      <div class="modal">
+        <h3>${h(labelMap[p.role])} sign-in</h3>
+        <p>Enter the ${h(labelMap[p.role])} password to continue.</p>
+        <input type="password" id="pw-input" placeholder="Password" autofocus>
+        ${STATE.passwordError ? `<div class="err">${h(STATE.passwordError)}</div>` : ''}
+        <div class="row">
+          <button class="btn btn-cancel" data-modal-cancel>Cancel</button>
+          <button class="btn btn-ok" data-modal-ok>Continue</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function attachModalHandlers() {
+  const overlay = document.querySelector('[data-modal-overlay]');
+  if (!overlay) return;
+  const input = document.getElementById('pw-input');
+  input.focus();
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') submitPassword(); });
+  overlay.querySelector('[data-modal-cancel]').addEventListener('click', () => { STATE.passwordPrompt = null; STATE.passwordError=''; render(); });
+  overlay.querySelector('[data-modal-ok]').addEventListener('click', submitPassword);
+}
+
+function submitPassword() {
+  const input = document.getElementById('pw-input');
+  const entered = input.value;
+  const p = STATE.passwordPrompt;
+  if (entered !== PASSWORDS[p.role]) {
+    STATE.passwordError = 'Incorrect password. Try again.';
+    render();
+    return;
+  }
+  STATE.passwordError = '';
+  const cb = p.onSuccess;
+  STATE.passwordPrompt = null;
+  cb();
+}
+
+// ============ ADMIN SETUP ============
+function renderAdminSetup() {
+  const c = STATE.config;
+  const f = (k) => h(c[k] || '');
+  return `
+    <div class="wrap">
+      ${topBar('Admin Setup', true)}
+      <div class="body-card">
+        <div class="setup-form">
+          <h2>First-time setup</h2>
+          <div class="sub">Connect this app to your OneDrive files and SharePoint lists. See the Build Guide for where to find each value.</div>
+
+          <div class="field-section">Organization</div>
+          <div class="field-grp"><label>Organization name</label><input id="cfg-orgName" value="${f('orgName')}" placeholder="e.g. TechNova"></div>
+          <div class="field-grp"><label>Doctor's name (default)</label><input id="cfg-doctorName" value="${f('doctorName')}" placeholder="e.g. Dr. A. Sharma"></div>
+
+          <div class="field-section">Microsoft sign-in (Azure)</div>
+          <div class="field-grp"><label>Client ID</label><input id="cfg-clientId" value="${f('clientId')}" placeholder="Application (client) ID"></div>
+          <div class="field-grp"><label>Tenant ID</label><input id="cfg-tenantId" value="${f('tenantId')}" placeholder="Directory (tenant) ID"></div>
+
+          <div class="field-section">Employee Master (Excel)</div>
+          <div class="field-grp"><label>File ID</label><input id="cfg-masterFileId" value="${f('masterFileId')}" placeholder="OneDrive file ID"></div>
+          <div class="field-grp"><label>Sheet name</label><input id="cfg-masterSheet" value="${c.masterSheet || 'Sheet1'}" placeholder="Sheet1"></div>
+
+          <div class="field-section">Health Checkup (Excel)</div>
+          <div class="field-grp"><label>File ID</label><input id="cfg-healthFileId" value="${f('healthFileId')}" placeholder="OneDrive file ID"></div>
+          <div class="field-grp"><label>Sheet name</label><input id="cfg-healthSheet" value="${c.healthSheet || 'Result 1'}" placeholder="Result 1"></div>
+
+          <div class="field-section">SharePoint</div>
+          <div class="field-grp"><label>Site ID</label><input id="cfg-siteId" value="${f('siteId')}" placeholder="SharePoint Site ID"></div>
+          <div class="field-grp"><label>DoctorConsultations List ID</label><input id="cfg-consultListId" value="${f('consultListId')}" placeholder="List ID"></div>
+          <div class="field-grp"><label>EmployeeHealthProfile List ID</label><input id="cfg-profileListId" value="${f('profileListId')}" placeholder="List ID"></div>
+
+          <div class="setup-actions">
+            <button class="btn btn-secondary" data-action="go-home">Cancel</button>
+            <button class="btn btn-primary" data-action="save-admin">Save & OK ✓</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function saveAdminSetup() {
+  const ids = ['orgName','doctorName','clientId','tenantId','masterFileId','masterSheet','healthFileId','healthSheet','siteId','consultListId','profileListId'];
+  const c = {};
+  ids.forEach(id => { c[id] = document.getElementById('cfg-' + id).value.trim(); });
+  STATE.config = c;
+  saveConfig(c);
+  STATE.toast = { type:'success', msg:'Setup saved — the app is now connected.' };
+  STATE.screen = 'home';
+  render();
+}
+
+// ============ DOCTOR — SEARCH ============
+function renderDoctorSearch() {
+  return `
+    <div class="wrap">
+      ${topBar('Doctor', true)}
+      <div class="body-card">
+        <div class="search-box">
+          <h2>Find an employee</h2>
+          <div class="sub">Enter the Employee ID to start or continue a consultation.</div>
+          <div class="search-row">
+            <input id="search-input" value="${h(STATE.searchId)}" placeholder="Employee ID e.g. 1456780" autofocus>
+            <button data-action="do-search">Search</button>
+          </div>
+          ${STATE.searchError ? `<div class="search-err">${h(STATE.searchError)}</div>` : ''}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function doSearch() {
+  const input = document.getElementById('search-input');
+  const id = input.value.trim();
+  if (!id) { STATE.searchError = 'Enter an Employee ID.'; render(); return; }
+  STATE.searchId = id;
+  STATE.searchError = '';
+  STATE.loading = true;
+  render();
+
+  try {
+    const emp = await loadEmployeeById(id);
+    const health = await loadHealthById(id).catch(() => null);
+    const visits = await loadVisitCount(id).catch(() => 0);
+    STATE.employee = emp;
+    STATE.health = health;
+    STATE.visitCount = visits;
+    STATE.loading = false;
+    STATE.screen = 'doctor-summary';
+    render();
+  } catch (err) {
+    STATE.loading = false;
+    STATE.searchError = err.message || 'Employee not found.';
+    render();
+  }
+}
+
+async function loadEmployeeById(empId) {
+  const c = STATE.config;
+  const url = `https://graph.microsoft.com/v1.0/me/drive/items/${c.masterFileId}/workbook/worksheets/${encodeURIComponent(c.masterSheet||'Sheet1')}/usedRange`;
+  const data = await graphFetch(url);
+  if (!data || !data.values) throw new Error('Employee Master file has no data.');
+  const [hdr, ...rows] = data.values;
+  const ix = n => hdr.indexOf(n);
+  const cIdx = { id:ix('Employee ID'), name:ix('Employee Name'), desg:ix('Designation'), loc:ix('Location'), age:ix('Age'), gen:ix('Gender'), func:ix('Function'), div:ix('Division'), city:ix('City'), state:ix('State'), doj:ix('Date of Joining') };
+  const row = rows.find(r => String(r[cIdx.id]) === String(empId));
+  if (!row) throw new Error(`No employee found with ID "${empId}".`);
+  return { id:row[cIdx.id], name:row[cIdx.name], designation:row[cIdx.desg], location:row[cIdx.loc], age:row[cIdx.age], gender:row[cIdx.gen], function:row[cIdx.func], division:row[cIdx.div], city:row[cIdx.city], state:row[cIdx.state], doj:row[cIdx.doj] };
+}
+
+async function loadHealthById(empId) {
+  const c = STATE.config;
+  const url = `https://graph.microsoft.com/v1.0/me/drive/items/${c.healthFileId}/workbook/worksheets/${encodeURIComponent(c.healthSheet||'Result 1')}/usedRange`;
+  const data = await graphFetch(url);
+  if (!data || !data.values) return null;
+  const [hdr, ...rows] = data.values;
+  const ix = n => hdr.indexOf(n);
+  const cIdx = { id:ix('employee_id'), score:ix('overall_health_score'), risk:ix('overall_risk_category'), rep:ix('reports_upload_on') };
+  const empRows = rows.filter(r => String(r[cIdx.id]) === String(empId));
+  if (empRows.length === 0) return null;
+  return { score: empRows[0][cIdx.score], risk: empRows[0][cIdx.risk], reportDate: empRows[0][cIdx.rep] };
+}
+
+async function loadVisitCount(empId) {
+  const c = STATE.config;
+  const url = `https://graph.microsoft.com/v1.0/sites/${c.siteId}/lists/${c.consultListId}/items?expand=fields&$top=200`;
+  const data = await graphFetch(url);
+  return (data.value || []).filter(it => String(it.fields.EmployeeID) === String(empId)).length;
+}
+
+// ============ DOCTOR — SUMMARY ============
+function renderDoctorSummary() {
+  const e = STATE.employee, H = STATE.health;
+  const initials = (e.name||'?').split(' ').map(x=>x[0]).slice(0,2).join('').toUpperCase();
+  return `
+    <div class="wrap">
+      ${topBar('Doctor', true)}
+      <div class="body-card">
+        <div class="summary-card">
+          <div class="sum-header">
+            <div class="sum-avatar">${h(initials)}</div>
+            <div>
+              <div class="sum-name">${h(e.name)}</div>
+              <div class="sum-meta">ID ${h(e.id)} · ${e.gender==='M'?'Male':e.gender==='F'?'Female':h(e.gender)} · ${h(e.age||'—')} yrs</div>
+            </div>
+          </div>
+
+          <div class="sum-grid">
+            <div class="sum-item"><div class="k">Designation</div><div class="v">${h(e.designation||'—')}</div></div>
+            <div class="sum-item"><div class="k">Location</div><div class="v">${h(e.location||'—')}</div></div>
+            <div class="sum-item"><div class="k">Function</div><div class="v">${h(e.function||'—')}</div></div>
+            <div class="sum-item"><div class="k">Division</div><div class="v">${h(e.division||'—')}</div></div>
+          </div>
+
+          ${H ? `
+            <div class="sum-health">
+              <div class="sum-score"><div class="num">${h(H.score)}</div><div class="lbl">SCORE</div></div>
+              <div>
+                <div style="font-weight:700">${h(H.risk||'—')}</div>
+                <div style="font-size:11.5px;color:#728279">Report ${h(fmtDate(H.reportDate))}</div>
+              </div>
+            </div>
+          ` : `<div class="empty-msg" style="margin-bottom:18px">No annual checkup on record for this employee.</div>`}
+
+          <div class="sum-visits">${STATE.visitCount} previous consultation(s) on record</div>
+
+          <div class="sum-actions">
+            <button class="btn btn-secondary" data-action="back-search">← Search again</button>
+            <button class="btn btn-primary" data-action="start-consultation">Start consultation →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function startConsultation() {
+  location.href = `consultation.html?empId=${encodeURIComponent(STATE.employee.id)}`;
+}
+
+// ============ ORGANIZATION DASHBOARD ============
+function renderOrg() {
+  const d = STATE.orgData;
+  if (STATE.loading) return `<div class="wrap">${topBar('Organization', true)}<div class="body-card"><div class="loader"><div class="spinner"></div><div>Loading dashboard…</div></div></div></div>`;
+  if (!d) return `<div class="wrap">${topBar('Organization', true)}<div class="body-card"><div class="empty-msg">Could not load dashboard data.</div></div></div>`;
+
+  return `
+    <div class="wrap">
+      ${topBar('Organization', true)}
+      <div class="body-card">
+        <div class="dash-title">Organization Dashboard</div>
+        <div class="dash-sub">Consultation activity across the company</div>
+
+        <div class="stat-grid">
+          <div class="stat-card"><div class="num">${d.totalVisits}</div><div class="lbl">Total consultations</div></div>
+          <div class="stat-card"><div class="num">${d.uniqueEmployees}</div><div class="lbl">Unique employees seen</div></div>
+          <div class="stat-card"><div class="num">${d.openGoals}</div><div class="lbl">Open goals</div></div>
+          <div class="stat-card"><div class="num">${d.referrals}</div><div class="lbl">Specialist referrals</div></div>
+        </div>
+
+        <div class="dash-title" style="font-size:15px;margin-top:24px">Recent consultations</div>
+        ${d.recent.length ? `
+          <table class="dash-table">
+            <thead><tr><th>Date</th><th>Employee</th><th>Complaint</th><th>Follow-up</th></tr></thead>
+            <tbody>
+              ${d.recent.map(r => `<tr>
+                <td>${h(fmtDate(r.VisitDate))}</td>
+                <td>${h(r.EmployeeName)} <span style="color:#728279">(${h(r.EmployeeID)})</span></td>
+                <td>${h((r.Complaint||'').slice(0,60))}${(r.Complaint||'').length>60?'…':''}</td>
+                <td>${r.FollowUpDate ? h(fmtDate(r.FollowUpDate)) : '—'}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        ` : `<div class="empty-msg">No consultations recorded yet.</div>`}
+      </div>
+    </div>
+  `;
+}
+
+async function loadOrgDashboard() {
+  STATE.loading = true; render();
+  try {
+    const c = STATE.config;
+    const url = `https://graph.microsoft.com/v1.0/sites/${c.siteId}/lists/${c.consultListId}/items?expand=fields&$top=500`;
+    const data = await graphFetch(url);
+    const rows = (data.value || []).map(it => it.fields).sort((a,b) => new Date(b.VisitDate) - new Date(a.VisitDate));
+    const uniqueEmployees = new Set(rows.map(r => r.EmployeeID)).size;
+    const openGoals = rows.reduce((sum, r) => sum + safeParse(r.Goals, []).filter(g => g.status==='open').length, 0);
+    const referrals = rows.filter(r => r.Referral && r.Referral.trim()).length;
+    STATE.orgData = { totalVisits: rows.length, uniqueEmployees, openGoals, referrals, recent: rows.slice(0,15) };
+  } catch (err) {
+    STATE.toast = { type:'error', msg:'Failed to load dashboard: ' + err.message };
+    STATE.orgData = null;
+  }
+  STATE.loading = false;
+  render();
+}
+
+// ============ HR DASHBOARD ============
+function renderHR() {
+  const d = STATE.hrData;
+  if (STATE.loading) return `<div class="wrap">${topBar('HR', true)}<div class="body-card"><div class="loader"><div class="spinner"></div><div>Loading rewards data…</div></div></div></div>`;
+  if (!d) return `<div class="wrap">${topBar('HR', true)}<div class="body-card"><div class="empty-msg">Could not load rewards data.</div></div></div>`;
+
+  return `
+    <div class="wrap">
+      ${topBar('HR', true)}
+      <div class="body-card">
+        <div class="dash-title">HR Rewards</div>
+        <div class="dash-sub">Goal achievement across employees · Yes = 100 pts · Partially = 50 pts · No = 0 pts</div>
+
+        <div class="stat-grid">
+          <div class="stat-card"><div class="num">${d.totalGoals}</div><div class="lbl">Total goals set</div></div>
+          <div class="stat-card"><div class="num">${d.closedGoals}</div><div class="lbl">Goals reviewed</div></div>
+          <div class="stat-card"><div class="num">${d.openGoals}</div><div class="lbl">Still open</div></div>
+          <div class="stat-card"><div class="num">${d.avgPoints}</div><div class="lbl">Avg points (reviewed)</div></div>
+        </div>
+
+        <div class="dash-title" style="font-size:15px;margin-top:24px">Employee scores</div>
+        ${d.employees.length ? `
+          <table class="dash-table">
+            <thead><tr><th>Employee</th><th>Goals set</th><th>Reviewed</th><th>Total points</th></tr></thead>
+            <tbody>
+              ${d.employees.map(e => `<tr>
+                <td>${h(e.name)} <span style="color:#728279">(${h(e.id)})</span></td>
+                <td>${e.total}</td>
+                <td>${e.reviewed}</td>
+                <td>${e.points}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        ` : `<div class="empty-msg">No goals recorded yet.</div>`}
+
+        <div class="dash-title" style="font-size:15px;margin-top:24px">Recent goal reviews</div>
+        ${d.recentReviews.length ? `
+          <table class="dash-table">
+            <thead><tr><th>Employee</th><th>Goal</th><th>Status</th><th>Points</th></tr></thead>
+            <tbody>
+              ${d.recentReviews.map(r => `<tr>
+                <td>${h(r.empName)}</td>
+                <td>${h(r.goalName)}</td>
+                <td>${r.status==='open' ? '<span class="status-open">Open</span>' : h(r.status)}</td>
+                <td>${r.status==='open' ? '—' : `<span class="pts-badge pts-${GOAL_POINTS[r.status]}">${GOAL_POINTS[r.status]} pts</span>`}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        ` : `<div class="empty-msg">No reviewed goals yet.</div>`}
+      </div>
+    </div>
+  `;
+}
+
+async function loadHRDashboard() {
+  STATE.loading = true; render();
+  try {
+    const c = STATE.config;
+    const url = `https://graph.microsoft.com/v1.0/sites/${c.siteId}/lists/${c.consultListId}/items?expand=fields&$top=500`;
+    const data = await graphFetch(url);
+    const rows = (data.value || []).map(it => it.fields);
+
+    let totalGoals = 0, closedGoals = 0, openGoals = 0, pointsSum = 0;
+    const byEmp = {};
+    const recentReviews = [];
+
+    rows.forEach(r => {
+      const goals = safeParse(r.Goals, []);
+      goals.forEach(g => {
+        totalGoals++;
+        const empKey = r.EmployeeID;
+        if (!byEmp[empKey]) byEmp[empKey] = { id:r.EmployeeID, name:r.EmployeeName, total:0, reviewed:0, points:0 };
+        byEmp[empKey].total++;
+
+        if (g.status === 'open') {
+          openGoals++;
+        } else {
+          closedGoals++;
+          const pts = GOAL_POINTS[g.status] ?? 0;
+          pointsSum += pts;
+          byEmp[empKey].reviewed++;
+          byEmp[empKey].points += pts;
+          const gt = GOAL_TYPES.find(t => t.id === g.type);
+          recentReviews.push({
+            empName: r.EmployeeName, goalName: g.type==='other' ? g.customText : (gt?gt.name:g.type),
+            status: g.status, closedOn: g.closedOn
+          });
+        }
+      });
+    });
+
+    recentReviews.sort((a,b) => new Date(b.closedOn||0) - new Date(a.closedOn||0));
+
+    STATE.hrData = {
+      totalGoals, closedGoals, openGoals,
+      avgPoints: closedGoals ? Math.round(pointsSum/closedGoals) : 0,
+      employees: Object.values(byEmp).sort((a,b) => b.points - a.points),
+      recentReviews: recentReviews.slice(0,15)
+    };
+  } catch (err) {
+    STATE.toast = { type:'error', msg:'Failed to load rewards data: ' + err.message };
+    STATE.hrData = null;
+  }
+  STATE.loading = false;
+  render();
+}
+
+// ============ NAVIGATION ============
+function goHome() { STATE.screen = 'home'; STATE.loggedInRole = null; render(); }
+
+function requireLogin(role, next) {
+  if (role === 'admin') {
+    STATE.passwordPrompt = { role:'admin', onSuccess: () => { STATE.screen = 'admin-setup'; render(); } };
+    render();
+    return;
+  }
+  if (!configReady(STATE.config)) {
+    STATE.toast = { type:'error', msg:'Run Admin Setup first (top-right ⚙).' };
+    render();
+    return;
+  }
+  STATE.passwordPrompt = { role, onSuccess: async () => {
+    STATE.pendingRoleForRedirect = role;
+    document.getElementById('app').innerHTML = '<div class="loader"><div class="spinner"></div><div>Signing you in…</div></div>';
+    try { await ensureAuth(); } catch (e) { STATE.toast = { type:'error', msg:'Sign-in failed: ' + e.message }; render(); return; }
+    STATE.loggedInRole = role;
+    next();
+  }};
+  render();
+}
+
+// ============ HANDLERS ============
+function attachHandlers() {
+  const app = document.getElementById('app');
+
+  app.querySelectorAll('[data-action]').forEach(el => {
+    el.addEventListener('click', () => {
+      const a = el.dataset.action;
+      if (a === 'go-home') return goHome();
+      if (a === 'open-admin') return requireLogin('admin');
+      if (a === 'save-admin') return saveAdminSetup();
+      if (a === 'do-search') return doSearch();
+      if (a === 'back-search') { STATE.screen = 'doctor-search'; STATE.searchError=''; render(); return; }
+      if (a === 'start-consultation') return startConsultation();
+      if (a === 'login') {
+        const role = el.dataset.role;
+        if (role === 'doctor') requireLogin('doctor', () => { STATE.screen = 'doctor-search'; render(); });
+        if (role === 'org')    requireLogin('org',    () => { STATE.screen = 'org'; loadOrgDashboard(); });
+        if (role === 'hr')     requireLogin('hr',     () => { STATE.screen = 'hr'; loadHRDashboard(); });
+      }
+    });
+  });
+
+  const searchInput = document.getElementById('search-input');
+  if (searchInput) searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+}
+
+// ============ START ============
+init();
+</script>
+</body>
+</html>
